@@ -5,7 +5,8 @@ fn main() {
     let mut cpu = chip8::Chip8::new();
 
     let sample_rom: Vec<u8> = vec![0x12, 0x00, 0xAB, 0xFF];
-    cpu.load_rom(&sample_rom);
-
-    println!("ROM loaded!");
+    match cpu.load_rom(&sample_rom) {
+        Ok(()) => println!("ROM loaded succesfully!"),
+        Err(e) => println!("Error loading ROM: {}", e),
+    }
 }

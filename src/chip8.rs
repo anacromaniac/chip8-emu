@@ -45,10 +45,22 @@ impl Chip8 {
         }
     }
 
-    pub fn load_rom(&mut self, data: &[u8]) {
+    pub fn load_rom(&mut self, data: &[u8]) -> Result<(), String> {
+        let max_size = MEMORY_SIZE - ROM_START as usize;
+
+        if data.len() > max_size {
+            return Err(format!(
+                "ROM too large: {} bytes, maximum {} bytes",
+                data.len(),
+                max_size)
+            );
+        }
+
         let start = ROM_START as usize;
         let end = start + data.len();
 
-        self.memory[start..end].copy_from_slice(data)
+        self.memory[start..end].copy_from_slice(data);
+
+        Ok(())
     }
 }
