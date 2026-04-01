@@ -11,6 +11,31 @@ const NUM_REGISTERS: usize = 16;
 const NUM_KEYS: usize = 16;
 const ROM_START: u16 = 0x200;
 
+// 0-F hexadecimal digits
+const FONT_CHARS: usize = 16;
+const FONT_BYTES_PER_CHAR: usize = 5;
+const FONTSET_SIZE: usize = FONT_CHARS * FONT_BYTES_PER_CHAR;
+const FONTSET_START: usize = 0x000;
+
+const FONTSET: [u8; FONTSET_SIZE] = [
+    0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
+    0x20, 0x60, 0x20, 0x20, 0x70, // 1
+    0xF0, 0x10, 0xF0, 0x80, 0xF0, // 2
+    0xF0, 0x10, 0xF0, 0x10, 0xF0, // 3
+    0x90, 0x90, 0xF0, 0x10, 0x10, // 4
+    0xF0, 0x80, 0xF0, 0x10, 0xF0, // 5
+    0xF0, 0x80, 0xF0, 0x90, 0xF0, // 6
+    0xF0, 0x10, 0x20, 0x40, 0x40, // 7
+    0xF0, 0x90, 0xF0, 0x90, 0xF0, // 8
+    0xF0, 0x90, 0xF0, 0x10, 0xF0, // 9
+    0xF0, 0x90, 0xF0, 0x90, 0x90, // A
+    0xE0, 0x90, 0xE0, 0x90, 0xE0, // B
+    0xF0, 0x80, 0x80, 0x80, 0xF0, // C
+    0xE0, 0x90, 0x90, 0x90, 0xE0, // D
+    0xF0, 0x80, 0xF0, 0x80, 0xF0, // E
+    0xF0, 0x80, 0xF0, 0x80, 0x80, // F
+];
+
 pub struct Chip8 {
     // 4KB RAM
     memory: [u8; MEMORY_SIZE],
@@ -38,7 +63,7 @@ pub struct Chip8 {
 
 impl Chip8 {
     pub fn new() -> Self {
-        Chip8 {
+        let mut chip8 = Chip8 {
             memory: [0; MEMORY_SIZE],
             v: [0; NUM_REGISTERS],
             pc: ROM_START,
@@ -48,7 +73,11 @@ impl Chip8 {
             delay_timer: 0,
             sound_timer: 0,
             keys: [false; NUM_KEYS]
-        }
+        };
+
+        chip8.memory[FONTSET_START..FONTSET_START + FONTSET_SIZE].copy_from_slice(&FONTSET);
+
+        chip8
     }
 
     pub fn load_rom(&mut self, data: &[u8]) -> Result<(), String> {
@@ -114,5 +143,24 @@ mod tests {
         let rom = vec![0u8; 4000];
         let result = cpu.load_rom(&rom);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_fontset_loaded_at_start() {
+        let cpu = Chip8::new();
+        // "0" starts at 0x000, first byte is 0xF0
+        assert_eq!(cpu.memory[0x000], 0xF0);
+        // "1" starts at 0x005, first byte is 0x20
+        assert_eq!(cpu.memory[0x005], 0x20);
+        // "F" starts at 0x04B (75), first byte is 0xF0
+        assert_eq!(cpu.memory[0x04B], 0xF0);
+    }
+
+    #[test]
+    fn test_fontset_not_overwritten_by_rom() {
+        let mut cpu = Chip8::new();
+        let rom = vec![0x12, 0x00];
+        cpu.load_rom(&rom).unwrap();
+        assert_eq!(cpu.memory[0x000], 0xF0);
     }
 }
