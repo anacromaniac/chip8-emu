@@ -64,3 +64,49 @@ impl Chip8 {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_new_pc_starts_at_rom_start() {
+        let chip8 = Chip8::new();
+        assert_eq!(chip8.pc, ROM_START);
+    }
+
+    #[test]
+    fn test_new_memory_is_zeroed() {
+        let chip8 = Chip8::new();
+        assert_eq!(chip8.memory[ROM_START as usize], 0);
+    }
+
+    #[test]
+    fn test_load_rom_ok() {
+        let mut cpu = Chip8::new();
+        let rom = vec![0x43, 0x6F, 0x77, 0x67, 0x6F, 0x64];
+        let result = cpu.load_rom(&rom);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_load_rom_data_in_memory() {
+        let mut cpu = Chip8::new();
+        let rom = vec![0x43, 0x6F, 0x77, 0x67, 0x6F, 0x64];
+        cpu.load_rom(&rom).unwrap();
+        assert_eq!(cpu.memory[0x200], 0x43);
+        assert_eq!(cpu.memory[0x201], 0x6F);
+        assert_eq!(cpu.memory[0x202], 0x77);
+        assert_eq!(cpu.memory[0x203], 0x67);
+        assert_eq!(cpu.memory[0x204], 0x6F);
+        assert_eq!(cpu.memory[0x205], 0x64);
+    }
+
+    #[test]
+    fn test_load_rom_too_large() {
+        let mut cpu = Chip8::new();
+        let rom = vec![0u8; 4000];
+        let result = cpu.load_rom(&rom);
+        assert!(result.is_err());
+    }
+}
