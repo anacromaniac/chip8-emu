@@ -1,4 +1,5 @@
 /target
 
-# IDE
+# Dev tools
 .idea
+.claude

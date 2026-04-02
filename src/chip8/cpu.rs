@@ -38,12 +38,12 @@ const FONTSET: [u8; FONTSET_SIZE] = [
 
 pub struct Chip8 {
     // 4KB RAM
-    memory: [u8; MEMORY_SIZE],
+    pub(crate) memory: [u8; MEMORY_SIZE],
     // V0 to VF registers
     v: [u8; NUM_REGISTERS],
 
     // Program Counter
-    pc: u16,
+    pub(crate) pc: u16,
 
     // Index Register
     i: u16,
@@ -176,13 +176,11 @@ mod tests {
     #[test]
     fn test_fetch_reads_two_bytes() {
         let mut cpu = Chip8::new();
-        // piazziamo manualmente due byte in memoria a ROM_START
         cpu.memory[0x200] = 0x12;
         cpu.memory[0x201] = 0x00;
 
         let opcode = cpu.fetch();
 
-        // i due byte combinati devono formare 0x1200
         assert_eq!(opcode, 0x1200);
     }
 
@@ -194,7 +192,6 @@ mod tests {
 
         cpu.fetch();
 
-        // dopo il fetch il PC deve essere avanzato di 2
         assert_eq!(cpu.pc, 0x202);
     }
 }
