@@ -191,7 +191,7 @@ impl Chip8 {
             }
 
             Instruction::Unknown(opcode) => {
-                eprintln!("Unknown opcode: {:#06X}", opcode);
+                panic!("Unknown opcode: {:#06X}", opcode);
             }
         }
     }
@@ -328,7 +328,8 @@ mod tests {
         }
 
         #[test]
-        fn test_unknown_opcode_does_not_panic() {
+        #[should_panic(expected = "Unknown opcode: 0xFFFF")]
+        fn test_unknown_opcode_panics() {
             let mut cpu = Chip8::new();
             cpu.execute(Instruction::Unknown(0xFFFF));
         }
