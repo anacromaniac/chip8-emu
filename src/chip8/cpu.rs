@@ -80,7 +80,7 @@ pub struct Chip8 {
     sound_timer: u8,
 
     //16 keys, true = pressed
-    keys: [bool; NUM_KEYS]
+    keys: [bool; NUM_KEYS],
 }
 
 impl Chip8 {
@@ -94,7 +94,7 @@ impl Chip8 {
             display: [false; DISPLAY_WIDTH * DISPLAY_HEIGHT],
             delay_timer: 0,
             sound_timer: 0,
-            keys: [false; NUM_KEYS]
+            keys: [false; NUM_KEYS],
         };
 
         chip8.memory[FONTSET_START..FONTSET_START + FONTSET_SIZE].copy_from_slice(&FONTSET);
@@ -109,8 +109,8 @@ impl Chip8 {
             return Err(format!(
                 "ROM too large: {} bytes, maximum {} bytes",
                 data.len(),
-                max_size)
-            );
+                max_size
+            ));
         }
 
         let start = ROM_START as usize;
@@ -133,9 +133,9 @@ impl Chip8 {
     pub fn decode(&self, opcode: u16) -> Instruction {
         let x = ((opcode & 0x0F00) >> 8) as usize;
         let y = ((opcode & 0x00F0) >> 4) as usize;
-        let n   = (opcode & 0x000F) as u8;
-        let kk  = (opcode & 0x00FF) as u8;
-        let nnn= opcode & 0x0FFF;
+        let n = (opcode & 0x000F) as u8;
+        let kk = (opcode & 0x00FF) as u8;
+        let nnn = opcode & 0x0FFF;
 
         match (
             (opcode & 0xF000) >> 12,
@@ -145,13 +145,13 @@ impl Chip8 {
         ) {
             (0x0, 0x0, 0xE, 0x0) => Instruction::Cls,
             (0x0, 0x0, 0xE, 0xE) => Instruction::Ret,
-            (0x0, _, _, _)       => Instruction::Sys { addr: nnn },
-            (0x1, _, _, _)       => Instruction::Jp { addr: nnn },
-            (0x2, _, _, _)       => Instruction::Call { addr: nnn },
-            (0x6, _, _, _)       => Instruction::LdVxByte { x, kk },
-            (0x7, _, _, _)       => Instruction::AddVxByte { x, kk },
-            (0xA, _, _, _)       => Instruction::LdI { nnn },
-            _                    => Instruction::Unknown(opcode),
+            (0x0, _, _, _) => Instruction::Sys { addr: nnn },
+            (0x1, _, _, _) => Instruction::Jp { addr: nnn },
+            (0x2, _, _, _) => Instruction::Call { addr: nnn },
+            (0x6, _, _, _) => Instruction::LdVxByte { x, kk },
+            (0x7, _, _, _) => Instruction::AddVxByte { x, kk },
+            (0xA, _, _, _) => Instruction::LdI { nnn },
+            _ => Instruction::Unknown(opcode),
         }
     }
 
