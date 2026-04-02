@@ -10,6 +10,7 @@ const DISPLAY_HEIGHT: usize = 32;
 const NUM_REGISTERS: usize = 16;
 const NUM_KEYS: usize = 16;
 const ROM_START: u16 = 0x200;
+const STACK_SIZE: usize = 16;
 
 // 0-F hexadecimal digits
 const FONT_CHARS: usize = 16;
@@ -181,6 +182,9 @@ impl Chip8 {
             }
 
             Instruction::Call { addr } => {
+                if self.stack.len() == STACK_SIZE {
+                    panic!("CALL stack overflow");
+                }
                 self.stack.push(self.pc);
                 self.pc = addr;
             }
@@ -402,6 +406,14 @@ mod tests {
         }
 
         #[test]
+        fn test_opcode_add_vx_wraps_on_overflow() {
+            let mut cpu = Chip8::new();
+            cpu.v[0] = 0xFF;
+            cpu.execute(Instruction::AddVxByte { x: 0, kk: 0x01 });
+            assert_eq!(cpu.v[0], 0x00);
+        }
+
+        #[test]
         fn test_opcode_ld_i_sets_i() {
             let mut cpu = Chip8::new();
             cpu.execute(Instruction::LdI { addr: 0x123 });
@@ -461,6 +473,15 @@ mod tests {
         fn test_ret_empty_stack_panics() {
             let mut cpu = Chip8::new();
             cpu.execute(Instruction::Ret);
+        }
+
+        #[test]
+        #[should_panic(expected = "CALL stack overflow")]
+        fn test_call_stack_overflow_panics() {
+            let mut cpu = Chip8::new();
+            for _ in 0..=STACK_SIZE {
+                cpu.execute(Instruction::Call { addr: 0x300 });
+            }
         }
 
         #[test]
