@@ -567,7 +567,6 @@ mod tests {
             assert_eq!(cpu.decode(0xFFFF), Instruction::Unknown(0xFFFF));
         }
 
-
         #[test]
         fn test_decode_se_vx_byte() {
             let cpu = Chip8::new();
@@ -858,7 +857,6 @@ mod tests {
             cpu.execute(Instruction::OrVxVy { x: 2, y: 3 });
             assert_eq!(cpu.v[2], 0b11111100);
         }
-
 
         #[test]
         fn test_and_vx_vy() {
