@@ -42,29 +42,40 @@ pub enum Instruction {
     /// 0NNN - SYS - Jump to a machine code routine at nnn
     /// Ignored in modern interpreters so it won't do anything
     Sys { addr: u16 },
+
     /// 00E0 - CLS - Clear the display
     Cls,
+
     /// 00EE - RET - Return from subroutine
     Ret,
+
     /// 1NNN - JP addr - Jump to location nnn
     Jp { addr: u16 },
+
     /// 2NNN - CALL addr - Call subroutine at nnn
     Call { addr: u16 },
+
     /// 6XKK - LD Vx, byte - The interpreter puts the value kk into register Vx
     LdVxByte { x: usize, kk: u8 },
+
     /// 7XKK - ADD Vx, byte - Adds the value kk to the value of register Vx, then stores the result in Vx
     AddVxByte { x: usize, kk: u8 },
+
     /// ANNN - LD I, addr - The value of register I is set to nnn
     LdI { addr: u16 },
+
     /// 3XKK - SE Vx, byte
     /// Skip next instruction if Vx == kk
     Se { x: usize, kk: u8 },
+
     /// 4XKK - SNE Vx, byte
     /// Skip next instruction if Vx != kk
     Sne { x: usize, kk: u8 },
+
     /// 5XY0 - SE Vx, Vy
     /// Skip next instruction if Vx == Vy
     SeVxVy { x: usize, y: usize },
+
     /// 8XY0 - LD Vx, Vy
     /// Set Vx = Vy
     LdVxVy { x: usize, y: usize },
