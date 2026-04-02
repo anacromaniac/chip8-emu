@@ -56,6 +56,15 @@ pub enum Instruction {
     AddVxByte { x: usize, kk: u8 },
     /// ANNN - LD I, addr - The value of register I is set to nnn
     LdI { addr: u16 },
+    /// 3XKK - SE Vx, byte
+    /// Skip next instruction if Vx == kk
+    Se { x: usize, kk: u8 },
+    /// 4XKK - SNE Vx, byte
+    /// Skip next instruction if Vx != kk
+    Sne { x: usize, kk: u8 },
+    /// 5XY0 - SE Vx, Vy
+    /// Skip next instruction if Vx == Vy
+    SeVxVy { x: usize, y: usize },
     /// Unknown opcode
     Unknown(u16),
 }
@@ -156,6 +165,9 @@ impl Chip8 {
             (0x0, _, _, _) => Instruction::Sys { addr: nnn },
             (0x1, _, _, _) => Instruction::Jp { addr: nnn },
             (0x2, _, _, _) => Instruction::Call { addr: nnn },
+            (0x3, _, _, _) => Instruction::Se { x, kk },
+            (0x4, _, _, _) => Instruction::Sne { x, kk },
+            (0x5, _, _, 0x0) => Instruction::SeVxVy { x, y },
             (0x6, _, _, _) => Instruction::LdVxByte { x, kk },
             (0x7, _, _, _) => Instruction::AddVxByte { x, kk },
             (0xA, _, _, _) => Instruction::LdI { addr: nnn },
@@ -199,6 +211,24 @@ impl Chip8 {
 
             Instruction::LdI { addr: nnn } => {
                 self.i = nnn;
+            }
+
+            Instruction::Se { x, kk } => {
+                if self.v[x] == kk {
+                    self.pc += 2;
+                }
+            }
+
+            Instruction::Sne { x, kk } => {
+                if self.v[x] != kk {
+                    self.pc += 2;
+                }
+            }
+
+            Instruction::SeVxVy { x, y } => {
+                if self.v[x] == self.v[y] {
+                    self.pc += 2;
+                }
             }
 
             Instruction::Unknown(opcode) => {
@@ -369,6 +399,25 @@ mod tests {
             let cpu = Chip8::new();
             assert_eq!(cpu.decode(0xFFFF), Instruction::Unknown(0xFFFF));
         }
+
+
+        #[test]
+        fn test_decode_se_vx_byte() {
+            let cpu = Chip8::new();
+            assert_eq!(cpu.decode(0x3210), Instruction::Se { x: 2, kk: 0x10 });
+        }
+
+        #[test]
+        fn test_decode_sne_vx_byte() {
+            let cpu = Chip8::new();
+            assert_eq!(cpu.decode(0x4210), Instruction::Sne { x: 2, kk: 0x10 });
+        }
+
+        #[test]
+        fn test_decode_se_vx_vy() {
+            let cpu = Chip8::new();
+            assert_eq!(cpu.decode(0x5230), Instruction::SeVxVy { x: 2, y: 3 });
+        }
     }
 
     mod execute {
@@ -489,6 +538,62 @@ mod tests {
             let mut cpu = Chip8::new();
             let pc_before = cpu.pc;
             cpu.execute(Instruction::Sys { addr: 0x200 });
+            assert_eq!(cpu.pc, pc_before);
+        }
+
+        #[test]
+        fn test_se_skips_when_equal() {
+            let mut cpu = Chip8::new();
+            cpu.v[2] = 0x10;
+            let pc_before = cpu.pc;
+            cpu.execute(Instruction::Se { x: 2, kk: 0x10 });
+            assert_eq!(cpu.pc, pc_before + 2);
+        }
+
+        #[test]
+        fn test_se_does_not_skip_when_not_equal() {
+            let mut cpu = Chip8::new();
+            cpu.v[2] = 0x10;
+            let pc_before = cpu.pc;
+            cpu.execute(Instruction::Se { x: 2, kk: 0x20 });
+            assert_eq!(cpu.pc, pc_before);
+        }
+
+        #[test]
+        fn test_sne_skips_when_not_equal() {
+            let mut cpu = Chip8::new();
+            cpu.v[2] = 0x10;
+            let pc_before = cpu.pc;
+            cpu.execute(Instruction::Sne { x: 2, kk: 0x20 });
+            assert_eq!(cpu.pc, pc_before + 2);
+        }
+
+        #[test]
+        fn test_sne_does_not_skip_when_equal() {
+            let mut cpu = Chip8::new();
+            cpu.v[2] = 0x10;
+            let pc_before = cpu.pc;
+            cpu.execute(Instruction::Sne { x: 2, kk: 0x10 });
+            assert_eq!(cpu.pc, pc_before);
+        }
+
+        #[test]
+        fn test_se_vx_vy_skips_when_equal() {
+            let mut cpu = Chip8::new();
+            cpu.v[2] = 0x10;
+            cpu.v[3] = 0x10;
+            let pc_before = cpu.pc;
+            cpu.execute(Instruction::SeVxVy { x: 2, y: 3 });
+            assert_eq!(cpu.pc, pc_before + 2);
+        }
+
+        #[test]
+        fn test_se_vx_vy_does_not_skip_when_not_equal() {
+            let mut cpu = Chip8::new();
+            cpu.v[2] = 0x10;
+            cpu.v[3] = 0x20;
+            let pc_before = cpu.pc;
+            cpu.execute(Instruction::SeVxVy { x: 2, y: 3 });
             assert_eq!(cpu.pc, pc_before);
         }
     }
