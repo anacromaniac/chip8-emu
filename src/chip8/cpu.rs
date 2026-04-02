@@ -218,7 +218,7 @@ mod tests {
         }
 
         #[test]
-        fn test_new_memory_is_zeroed() {
+        fn test_rom_start_is_zeroed() {
             let chip8 = Chip8::new();
             assert_eq!(chip8.memory[ROM_START as usize], 0);
         }
@@ -251,7 +251,7 @@ mod tests {
         #[test]
         fn test_load_rom_too_large() {
             let mut cpu = Chip8::new();
-            let rom = vec![0u8; 4000];
+            let rom = vec![0u8; MEMORY_SIZE - ROM_START as usize + 1];
             let result = cpu.load_rom(&rom);
             assert!(result.is_err());
         }
