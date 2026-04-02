@@ -682,7 +682,10 @@ mod tests {
         #[test]
         fn test_decode_add_vx_byte() {
             let cpu = Chip8::new();
-            assert_eq!(cpu.decode(0x7205), Instruction::AddVxByte { x: 2, kk: 0x05 });
+            assert_eq!(
+                cpu.decode(0x7205),
+                Instruction::AddVxByte { x: 2, kk: 0x05 }
+            );
         }
 
         #[test]
