@@ -124,6 +124,11 @@ pub enum Instruction {
     /// Set Vx = random byte AND kk
     Rnd { x: usize, kk: u8 },
 
+    /// DXYN - DRW Vx, Vy, nibble
+    /// Display n-byte sprite starting at memory location I at (Vx, Vy)
+    /// Set VF = collision
+    Drw { x: usize, y: usize, n: u8 },
+
     /// Unknown opcode
     Unknown(u16),
 }
@@ -242,6 +247,7 @@ impl Chip8 {
             (0xA, _, _, _) => Instruction::LdI { addr: nnn },
             (0xB, _, _, _) => Instruction::JpV0 { addr: nnn },
             (0xC, _, _, _) => Instruction::Rnd { x, kk },
+            (0xD, _, _, _) => Instruction::Drw { x, y, n },
             _ => Instruction::Unknown(opcode),
         }
     }
@@ -359,6 +365,37 @@ impl Chip8 {
             Instruction::Rnd { x, kk } => {
                 let random: u8 = rand::random::<u8>();
                 self.v[x] = random & kk;
+            }
+
+            Instruction::Drw { x, y, n } => {
+                let x_start = self.v[x] as usize % DISPLAY_WIDTH;
+                let y_start = self.v[y] as usize % DISPLAY_HEIGHT;
+
+                // reset collision flag
+                self.v[0xF] = 0;
+
+                for row in 0..n as usize {
+                    let sprite_byte = self.memory[self.i as usize + row];
+
+                    for col in 0..8 {
+                        let sprite_pixel = (sprite_byte >> (7 - col)) & 0x1;
+
+                        if sprite_pixel == 0 {
+                            continue;
+                        }
+
+                        let px = (x_start + col) % DISPLAY_WIDTH;
+                        let py = (y_start + row) % DISPLAY_HEIGHT;
+                        let idx = py * DISPLAY_WIDTH + px;
+
+                        // collision detection
+                        if self.display[idx] {
+                            self.v[0xF] = 1;
+                        }
+
+                        self.display[idx] ^= true;
+                    }
+                }
             }
 
             Instruction::Unknown(opcode) => {
@@ -619,6 +656,12 @@ mod tests {
         fn test_decode_rnd() {
             let cpu = Chip8::new();
             assert_eq!(cpu.decode(0xC20F), Instruction::Rnd { x: 2, kk: 0x0F });
+        }
+
+        #[test]
+        fn test_decode_drw() {
+            let cpu = Chip8::new();
+            assert_eq!(cpu.decode(0xD125), Instruction::Drw { x: 1, y: 2, n: 5 });
         }
     }
 
@@ -968,6 +1011,70 @@ mod tests {
             let mut cpu = Chip8::new();
             cpu.execute(Instruction::Rnd { x: 0, kk: 0x00 });
             assert_eq!(cpu.v[0], 0);
+        }
+
+        #[test]
+        fn test_drw_turns_on_pixels() {
+            let mut cpu = Chip8::new();
+            // sprite di una riga: 0xF0 = 11110000
+            cpu.memory[cpu.i as usize] = 0xF0;
+            cpu.v[0] = 0; // x = 0
+            cpu.v[1] = 0; // y = 0
+            cpu.execute(Instruction::Drw { x: 0, y: 1, n: 1 });
+            // i primi 4 pixel della prima riga devono essere accesi
+            assert!(cpu.display[0]);
+            assert!(cpu.display[1]);
+            assert!(cpu.display[2]);
+            assert!(cpu.display[3]);
+            assert!(!cpu.display[4]);
+        }
+
+        #[test]
+        fn test_drw_xor_toggles_pixels() {
+            let mut cpu = Chip8::new();
+            cpu.memory[cpu.i as usize] = 0xFF;
+            cpu.v[0] = 0;
+            cpu.v[1] = 0;
+            // disegna due volte — i pixel devono tornare spenti
+            cpu.execute(Instruction::Drw { x: 0, y: 1, n: 1 });
+            cpu.execute(Instruction::Drw { x: 0, y: 1, n: 1 });
+            assert!(!cpu.display[0]);
+        }
+
+        #[test]
+        fn test_drw_sets_vf_on_collision() {
+            let mut cpu = Chip8::new();
+            cpu.memory[cpu.i as usize] = 0xFF;
+            cpu.v[0] = 0;
+            cpu.v[1] = 0;
+            cpu.execute(Instruction::Drw { x: 0, y: 1, n: 1 });
+            assert_eq!(cpu.v[0xF], 0); // prima passata, nessuna collisione
+            cpu.execute(Instruction::Drw { x: 0, y: 1, n: 1 });
+            assert_eq!(cpu.v[0xF], 1); // seconda passata, collisione!
+        }
+
+        #[test]
+        fn test_drw_wraps_horizontally() {
+            let mut cpu = Chip8::new();
+            cpu.memory[cpu.i as usize] = 0xFF;
+            cpu.v[0] = 63; // x quasi al bordo destro
+            cpu.v[1] = 0;
+            cpu.execute(Instruction::Drw { x: 0, y: 1, n: 1 });
+            // il pixel a x=63 deve essere acceso
+            assert!(cpu.display[63]);
+            // il pixel wrappato a x=0 deve essere acceso
+            assert!(cpu.display[0]);
+        }
+
+        #[test]
+        fn test_drw_no_collision_resets_vf() {
+            let mut cpu = Chip8::new();
+            cpu.v[0xF] = 1; // impostiamo VF a 1 manualmente
+            cpu.memory[cpu.i as usize] = 0xFF;
+            cpu.v[0] = 0;
+            cpu.v[1] = 0;
+            cpu.execute(Instruction::Drw { x: 0, y: 1, n: 1 });
+            assert_eq!(cpu.v[0xF], 0); // VF deve essere resettato a 0
         }
     }
 }
