@@ -98,6 +98,15 @@ impl Chip8 {
 
         Ok(())
     }
+
+    pub fn fetch(&mut self) -> u16 {
+        let high_byte = self.memory[self.pc as usize] as u16;
+        let low_byte = self.memory[self.pc as usize + 1] as u16;
+        let opcode = (high_byte << 8) | low_byte;
+        self.pc += 2;
+
+        opcode
+    }
 }
 
 #[cfg(test)]
@@ -162,5 +171,30 @@ mod tests {
         let rom = vec![0x12, 0x00];
         cpu.load_rom(&rom).unwrap();
         assert_eq!(cpu.memory[0x000], 0xF0);
+    }
+
+    #[test]
+    fn test_fetch_reads_two_bytes() {
+        let mut cpu = Chip8::new();
+        // piazziamo manualmente due byte in memoria a ROM_START
+        cpu.memory[0x200] = 0x12;
+        cpu.memory[0x201] = 0x00;
+
+        let opcode = cpu.fetch();
+
+        // i due byte combinati devono formare 0x1200
+        assert_eq!(opcode, 0x1200);
+    }
+
+    #[test]
+    fn test_fetch_advances_pc() {
+        let mut cpu = Chip8::new();
+        cpu.memory[0x200] = 0x12;
+        cpu.memory[0x201] = 0x00;
+
+        cpu.fetch();
+
+        // dopo il fetch il PC deve essere avanzato di 2
+        assert_eq!(cpu.pc, 0x202);
     }
 }
