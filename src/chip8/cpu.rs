@@ -36,6 +36,24 @@ const FONTSET: [u8; FONTSET_SIZE] = [
     0xF0, 0x80, 0xF0, 0x80, 0x80, // F
 ];
 
+pub enum Instruction {
+    /// 0NNN - SYS - Jump to a machine code routine at nnn
+    /// Ignored in modern interpreters so it won't do anything
+    Sys { addr: u16 },
+    /// 00E0 - CLS - Clear the display
+    Cls,
+    /// 1NNN - JP addr - Jump to location nnn
+    Jp { addr: u16 },
+    /// 6XKK - LD Vx, byte - The interpreter puts the value kk into register Vx
+    LdVxByte { x: usize, kk: u8 },
+    /// 7XKK - ADD Vx, byte - Adds the value kk to the value of register Vx, then stores the result in Vx
+    AddVxByte { x: usize, kk: u8 },
+    /// ANNN - LD I, addr - The value of register I is set to nnn
+    LdI { nnn: u16 },
+    /// Unknown opcode
+    Unknown(u16),
+}
+
 pub struct Chip8 {
     // 4KB RAM
     memory: [u8; MEMORY_SIZE],
@@ -106,6 +124,61 @@ impl Chip8 {
         self.pc += 2;
 
         opcode
+    }
+
+    pub fn decode(&self, opcode: u16) -> Instruction {
+        let x = ((opcode & 0x0F00) >> 8) as usize;
+        let y = ((opcode & 0x00F0) >> 4) as usize;
+        let n   = (opcode & 0x000F) as u8;
+        let kk  = (opcode & 0x00FF) as u8;
+        let nnn= opcode & 0x0FFF;
+
+        match (
+            (opcode & 0xF000) >> 12,
+            (opcode & 0x0F00) >> 8,
+            (opcode & 0x00F0) >> 4,
+            opcode & 0x000F,
+        ) {
+            (0x0, 0x0, 0xE, 0x0) => Instruction::Cls,
+            (0x0, _, _, _)       => Instruction::Sys { addr: nnn },
+            (0x1, _, _, _)       => Instruction::Jp { addr: nnn },
+            (0x6, _, _, _)       => Instruction::LdVxByte { x, kk },
+            (0x7, _, _, _)       => Instruction::AddVxByte { x, kk },
+            (0xA, _, _, _)       => Instruction::LdI { nnn },
+            _                    => Instruction::Unknown(opcode),
+        }
+    }
+
+    pub fn execute(&mut self, instruction: Instruction) {
+        match instruction {
+            Instruction::Sys { addr: _ } => {
+                // ignored
+            }
+
+            Instruction::Cls => {
+                self.display = [false; DISPLAY_WIDTH * DISPLAY_HEIGHT];
+            }
+
+            Instruction::Jp { addr } => {
+                self.pc = addr;
+            }
+
+            Instruction::LdVxByte { x, kk } => {
+                self.v[x] = kk;
+            }
+
+            Instruction::AddVxByte { x, kk } => {
+                self.v[x] = self.v[x].wrapping_add(kk);
+            }
+
+            Instruction::LdI { nnn } => {
+                self.i = nnn;
+            }
+
+            Instruction::Unknown(opcode) => {
+                eprintln!("Unknown opcode: {:#06X}", opcode);
+            }
+        }
     }
 }
 
@@ -193,5 +266,56 @@ mod tests {
         cpu.fetch();
 
         assert_eq!(cpu.pc, 0x202);
+    }
+
+    mod opcodes {
+        use super::*;
+
+        #[test]
+        fn test_opcode_cls_clears_display() {
+            let mut cpu = Chip8::new();
+            cpu.display[0] = true;
+            cpu.display[100] = true;
+            let instruction = cpu.decode(0x00E0);
+            cpu.execute(instruction);
+            assert!(cpu.display.iter().all(|&p| p == false));
+        }
+
+        #[test]
+        fn test_opcode_jp_sets_pc() {
+            let mut cpu = Chip8::new();
+            cpu.execute(cpu.decode(0x1ABC));
+            assert_eq!(cpu.pc, 0xABC);
+        }
+
+        #[test]
+        fn test_opcode_ld_vx_sets_register() {
+            let mut cpu = Chip8::new();
+            // 6XKK → sets V3 = 0x42
+            cpu.execute(cpu.decode(0x6342));
+            assert_eq!(cpu.v[3], 0x42);
+        }
+
+        #[test]
+        fn test_opcode_add_vx_adds_value() {
+            let mut cpu = Chip8::new();
+            cpu.v[2] = 10;
+            // 7XKK → V2 += 5
+            cpu.execute(cpu.decode(0x7205));
+            assert_eq!(cpu.v[2], 15);
+        }
+
+        #[test]
+        fn test_opcode_ld_i_sets_i() {
+            let mut cpu = Chip8::new();
+            cpu.execute(cpu.decode(0xA123));
+            assert_eq!(cpu.i, 0x123);
+        }
+
+        #[test]
+        fn test_unknown_opcode_does_not_panic() {
+            let mut cpu = Chip8::new();
+            cpu.execute(Instruction::Unknown(0xFFFF));
+        }
     }
 }
