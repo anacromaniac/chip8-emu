@@ -137,6 +137,43 @@ pub enum Instruction {
     /// Skip next instruction if key with value Vx is not pressed
     Sknp { x: usize },
 
+    /// FX07 - LD Vx, DT
+    /// Set Vx = delay timer value
+    LdVxDt { x: usize },
+
+    /// FX15 - LD DT, Vx
+    /// Set delay timer = Vx
+    LdDtVx { x: usize },
+
+    /// FX18 - LD ST, Vx
+    /// Set sound timer = Vx
+    LdStVx { x: usize },
+
+    /// FX1E - ADD I, Vx
+    /// Set I = I + Vx
+    AddIVx { x: usize },
+
+    /// FX29 - LD F, Vx
+    /// Set I = location of sprite for digit Vx
+    LdFVx { x: usize },
+
+    /// FX0A - LD Vx, K
+    /// Wait for key press, store key value in Vx
+    /// Execution stops until a key is pressed
+    LdVxK { x: usize },
+
+    /// FX33 - LD B, Vx
+    /// Store BCD representation of Vx in memory at I, I+1, I+2
+    LdBVx { x: usize },
+
+    /// FX55 - LD [I], Vx
+    /// Store registers V0 through Vx in memory starting at I
+    LdIVx { x: usize },
+
+    /// FX65 - LD Vx, [I]
+    /// Read registers V0 through Vx from memory starting at I
+    LdVxI { x: usize },
+
     /// Unknown opcode
     Unknown(u16),
 }
@@ -258,6 +295,15 @@ impl Chip8 {
             (0xD, _, _, _) => Instruction::Drw { x, y, n },
             (0xE, _, 0x9, 0xE) => Instruction::Skp { x },
             (0xE, _, 0xA, 0x1) => Instruction::Sknp { x },
+            (0xF, _, 0x0, 0x7) => Instruction::LdVxDt { x },
+            (0xF, _, 0x0, 0xA) => Instruction::LdVxK { x },
+            (0xF, _, 0x1, 0x5) => Instruction::LdDtVx { x },
+            (0xF, _, 0x1, 0x8) => Instruction::LdStVx { x },
+            (0xF, _, 0x1, 0xE) => Instruction::AddIVx { x },
+            (0xF, _, 0x2, 0x9) => Instruction::LdFVx { x },
+            (0xF, _, 0x3, 0x3) => Instruction::LdBVx { x },
+            (0xF, _, 0x5, 0x5) => Instruction::LdIVx { x },
+            (0xF, _, 0x6, 0x5) => Instruction::LdVxI { x },
             _ => Instruction::Unknown(opcode),
         }
     }
@@ -419,6 +465,56 @@ impl Chip8 {
                 let key = self.v[x] as usize;
                 if !self.keys[key] {
                     self.pc += 2;
+                }
+            }
+
+            Instruction::LdVxDt { x } => {
+                self.v[x] = self.delay_timer;
+            }
+
+            Instruction::LdDtVx { x } => {
+                self.delay_timer = self.v[x];
+            }
+
+            Instruction::LdStVx { x } => {
+                self.sound_timer = self.v[x];
+            }
+
+            Instruction::AddIVx { x } => {
+                self.i += self.v[x] as u16;
+            }
+
+            Instruction::LdFVx { x } => {
+                // each font is 5 bytes, so digit Vx starts at FONTSET_START + Vx * 5
+                self.i = (FONTSET_START + self.v[x] as usize * FONT_BYTES_PER_CHAR) as u16;
+            }
+
+            Instruction::LdVxK { x } => {
+                // cerca un tasto premuto
+                let pressed = self.keys.iter().position(|&k| k);
+                match pressed {
+                    Some(key) => self.v[x] = key as u8,
+                    // nessun tasto premuto — riavvolgi il PC per rieseguire
+                    None => self.pc -= 2,
+                }
+            }
+
+            Instruction::LdBVx { x } => {
+                let value = self.v[x];
+                self.memory[self.i as usize]     = value / 100;       // centinaia
+                self.memory[self.i as usize + 1] = (value / 10) % 10; // decine
+                self.memory[self.i as usize + 2] = value % 10;        // unità
+            }
+
+            Instruction::LdIVx { x } => {
+                for reg in 0..=x {
+                    self.memory[self.i as usize + reg] = self.v[reg];
+                }
+            }
+
+            Instruction::LdVxI { x } => {
+                for reg in 0..=x {
+                    self.v[reg] = self.memory[self.i as usize + reg];
                 }
             }
 
@@ -698,6 +794,60 @@ mod tests {
             let cpu = Chip8::new();
             assert_eq!(cpu.decode(0xE2A1), Instruction::Sknp { x: 2 });
         }
+
+        #[test]
+        fn test_decode_ld_vx_dt() {
+            let cpu = Chip8::new();
+            assert_eq!(cpu.decode(0xF207), Instruction::LdVxDt { x: 2 });
+        }
+
+        #[test]
+        fn test_decode_ld_dt_vx() {
+            let cpu = Chip8::new();
+            assert_eq!(cpu.decode(0xF215), Instruction::LdDtVx { x: 2 });
+        }
+
+        #[test]
+        fn test_decode_ld_st_vx() {
+            let cpu = Chip8::new();
+            assert_eq!(cpu.decode(0xF218), Instruction::LdStVx { x: 2 });
+        }
+
+        #[test]
+        fn test_decode_add_i_vx() {
+            let cpu = Chip8::new();
+            assert_eq!(cpu.decode(0xF21E), Instruction::AddIVx { x: 2 });
+        }
+
+        #[test]
+        fn test_decode_ld_f_vx() {
+            let cpu = Chip8::new();
+            assert_eq!(cpu.decode(0xF229), Instruction::LdFVx { x: 2 });
+        }
+
+        #[test]
+        fn test_decode_ld_vx_k() {
+            let cpu = Chip8::new();
+            assert_eq!(cpu.decode(0xF20A), Instruction::LdVxK { x: 2 });
+        }
+
+        #[test]
+        fn test_decode_ld_b_vx() {
+            let cpu = Chip8::new();
+            assert_eq!(cpu.decode(0xF233), Instruction::LdBVx { x: 2 });
+        }
+
+        #[test]
+        fn test_decode_ld_i_vx() {
+            let cpu = Chip8::new();
+            assert_eq!(cpu.decode(0xF255), Instruction::LdIVx { x: 2 });
+        }
+
+        #[test]
+        fn test_decode_ld_vx_i() {
+            let cpu = Chip8::new();
+            assert_eq!(cpu.decode(0xF265), Instruction::LdVxI { x: 2 });
+        }
     }
 
     mod execute {
@@ -939,7 +1089,7 @@ mod tests {
             cpu.v[3] = 40;
             cpu.execute(Instruction::SubVxVy { x: 2, y: 3 });
             assert_eq!(cpu.v[2], 60);
-            assert_eq!(cpu.v[0xF], 1); // NOT borrow = 1 perché Vx > Vy
+            assert_eq!(cpu.v[0xF], 1); // NOT borrow = 1 because Vx > Vy
         }
 
         #[test]
@@ -948,7 +1098,7 @@ mod tests {
             cpu.v[2] = 40;
             cpu.v[3] = 100;
             cpu.execute(Instruction::SubVxVy { x: 2, y: 3 });
-            assert_eq!(cpu.v[0xF], 0); // NOT borrow = 0 perché Vx < Vy
+            assert_eq!(cpu.v[0xF], 0); // NOT borrow = 0 because Vx < Vy
         }
 
         #[test]
@@ -975,7 +1125,7 @@ mod tests {
             cpu.v[3] = 100;
             cpu.execute(Instruction::SubnVxVy { x: 2, y: 3 });
             assert_eq!(cpu.v[2], 60); // Vy - Vx = 100 - 40
-            assert_eq!(cpu.v[0xF], 1); // NOT borrow = 1 perché Vy > Vx
+            assert_eq!(cpu.v[0xF], 1); // NOT borrow = 1 because Vy > Vx
         }
 
         #[test]
@@ -1149,6 +1299,180 @@ mod tests {
             let pc_before = cpu.pc;
             cpu.execute(Instruction::Sknp { x: 2 });
             assert_eq!(cpu.pc, pc_before);
+        }
+
+        mod ld_vx_dt {
+            use super::*;
+
+            #[test]
+            fn test_ld_vx_dt_reads_timer() {
+                let mut cpu = Chip8::new();
+                cpu.delay_timer = 42;
+                cpu.execute(Instruction::LdVxDt { x: 3 });
+                assert_eq!(cpu.v[3], 42);
+            }
+        }
+
+        mod ld_dt_vx {
+            use super::*;
+
+            #[test]
+            fn test_ld_dt_vx_sets_timer() {
+                let mut cpu = Chip8::new();
+                cpu.v[3] = 60;
+                cpu.execute(Instruction::LdDtVx { x: 3 });
+                assert_eq!(cpu.delay_timer, 60);
+            }
+        }
+
+        mod ld_st_vx {
+            use super::*;
+
+            #[test]
+            fn test_ld_st_vx_sets_timer() {
+                let mut cpu = Chip8::new();
+                cpu.v[3] = 30;
+                cpu.execute(Instruction::LdStVx { x: 3 });
+                assert_eq!(cpu.sound_timer, 30);
+            }
+        }
+
+        mod add_i_vx {
+            use super::*;
+
+            #[test]
+            fn test_add_i_vx_adds_to_i() {
+                let mut cpu = Chip8::new();
+                cpu.i = 0x100;
+                cpu.v[2] = 0x10;
+                cpu.execute(Instruction::AddIVx { x: 2 });
+                assert_eq!(cpu.i, 0x110);
+            }
+        }
+
+        mod ld_f_vx {
+            use super::*;
+
+            #[test]
+            fn test_ld_f_vx_points_to_font_0() {
+                let mut cpu = Chip8::new();
+                cpu.v[0] = 0x0;
+                cpu.execute(Instruction::LdFVx { x: 0 });
+                assert_eq!(cpu.i, 0x000); // font "0" inizia a 0x000
+            }
+
+            #[test]
+            fn test_ld_f_vx_points_to_font_1() {
+                let mut cpu = Chip8::new();
+                cpu.v[0] = 0x1;
+                cpu.execute(Instruction::LdFVx { x: 0 });
+                assert_eq!(cpu.i, 0x005); // font "1" inizia a 0x005
+            }
+
+            #[test]
+            fn test_ld_f_vx_points_to_font_f() {
+                let mut cpu = Chip8::new();
+                cpu.v[0] = 0xF;
+                cpu.execute(Instruction::LdFVx { x: 0 });
+                assert_eq!(cpu.i, 0x04B); // font "F" inizia a 0x04B (75)
+            }
+        }
+
+        mod ld_vx_k {
+            use super::*;
+
+            #[test]
+            fn test_ld_vx_k_stores_key_when_pressed() {
+                let mut cpu = Chip8::new();
+                cpu.keys[0x5] = true;
+                cpu.execute(Instruction::LdVxK { x: 2 });
+                assert_eq!(cpu.v[2], 0x5);
+            }
+
+            #[test]
+            fn test_ld_vx_k_rewinds_pc_when_no_key() {
+                let mut cpu = Chip8::new();
+                let pc_before = cpu.pc;
+                cpu.execute(Instruction::LdVxK { x: 2 });
+                assert_eq!(cpu.pc, pc_before - 2);
+            }
+        }
+
+        mod ld_b_vx {
+            use super::*;
+
+            #[test]
+            fn test_ld_b_vx_stores_bcd() {
+                let mut cpu = Chip8::new();
+                cpu.i = 0x300;
+                cpu.v[2] = 156;
+                cpu.execute(Instruction::LdBVx { x: 2 });
+                assert_eq!(cpu.memory[0x300], 1); // centinaia
+                assert_eq!(cpu.memory[0x301], 5); // decine
+                assert_eq!(cpu.memory[0x302], 6); // unità
+            }
+
+            #[test]
+            fn test_ld_b_vx_stores_bcd_small_value() {
+                let mut cpu = Chip8::new();
+                cpu.i = 0x300;
+                cpu.v[2] = 7;
+                cpu.execute(Instruction::LdBVx { x: 2 });
+                assert_eq!(cpu.memory[0x300], 0);
+                assert_eq!(cpu.memory[0x301], 0);
+                assert_eq!(cpu.memory[0x302], 7);
+            }
+        }
+
+        mod ld_i_vx {
+            use super::*;
+
+            #[test]
+            fn test_ld_i_vx_stores_registers() {
+                let mut cpu = Chip8::new();
+                cpu.i = 0x300;
+                cpu.v[0] = 0x11;
+                cpu.v[1] = 0x22;
+                cpu.v[2] = 0x33;
+                cpu.execute(Instruction::LdIVx { x: 2 });
+                assert_eq!(cpu.memory[0x300], 0x11);
+                assert_eq!(cpu.memory[0x301], 0x22);
+                assert_eq!(cpu.memory[0x302], 0x33);
+            }
+        }
+
+        mod ld_vx_i {
+            use super::*;
+
+            #[test]
+            fn test_ld_vx_i_loads_registers() {
+                let mut cpu = Chip8::new();
+                cpu.i = 0x300;
+                cpu.memory[0x300] = 0x11;
+                cpu.memory[0x301] = 0x22;
+                cpu.memory[0x302] = 0x33;
+                cpu.execute(Instruction::LdVxI { x: 2 });
+                assert_eq!(cpu.v[0], 0x11);
+                assert_eq!(cpu.v[1], 0x22);
+                assert_eq!(cpu.v[2], 0x33);
+            }
+
+            #[test]
+            fn test_ld_vx_i_roundtrip_with_ld_i_vx() {
+                let mut cpu = Chip8::new();
+                cpu.i = 0x300;
+                cpu.v[0] = 0xAA;
+                cpu.v[1] = 0xBB;
+                // salva
+                cpu.execute(Instruction::LdIVx { x: 1 });
+                // azzera i registri
+                cpu.v[0] = 0;
+                cpu.v[1] = 0;
+                // ricarica
+                cpu.execute(Instruction::LdVxI { x: 1 });
+                assert_eq!(cpu.v[0], 0xAA);
+                assert_eq!(cpu.v[1], 0xBB);
+            }
         }
     }
 }
