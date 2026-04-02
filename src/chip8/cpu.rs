@@ -490,20 +490,20 @@ impl Chip8 {
             }
 
             Instruction::LdVxK { x } => {
-                // cerca un tasto premuto
+                // look for a pressed key
                 let pressed = self.keys.iter().position(|&k| k);
                 match pressed {
                     Some(key) => self.v[x] = key as u8,
-                    // nessun tasto premuto — riavvolgi il PC per rieseguire
+                    // no key pressed — rewind PC to re-execute
                     None => self.pc -= 2,
                 }
             }
 
             Instruction::LdBVx { x } => {
                 let value = self.v[x];
-                self.memory[self.i as usize]     = value / 100;       // centinaia
-                self.memory[self.i as usize + 1] = (value / 10) % 10; // decine
-                self.memory[self.i as usize + 2] = value % 10;        // unità
+                self.memory[self.i as usize] = value / 100; // hundreds
+                self.memory[self.i as usize + 1] = (value / 10) % 10; // tens
+                self.memory[self.i as usize + 2] = value % 10; // units
             }
 
             Instruction::LdIVx { x } => {
@@ -1200,12 +1200,12 @@ mod tests {
         #[test]
         fn test_drw_turns_on_pixels() {
             let mut cpu = Chip8::new();
-            // sprite di una riga: 0xF0 = 11110000
+            // single-row sprite: 0xF0 = 11110000
             cpu.memory[cpu.i as usize] = 0xF0;
             cpu.v[0] = 0; // x = 0
             cpu.v[1] = 0; // y = 0
             cpu.execute(Instruction::Drw { x: 0, y: 1, n: 1 });
-            // i primi 4 pixel della prima riga devono essere accesi
+            // the first 4 pixels of the first row must be on
             assert!(cpu.display[0]);
             assert!(cpu.display[1]);
             assert!(cpu.display[2]);
@@ -1219,7 +1219,7 @@ mod tests {
             cpu.memory[cpu.i as usize] = 0xFF;
             cpu.v[0] = 0;
             cpu.v[1] = 0;
-            // disegna due volte — i pixel devono tornare spenti
+            // draw twice — pixels should turn off again
             cpu.execute(Instruction::Drw { x: 0, y: 1, n: 1 });
             cpu.execute(Instruction::Drw { x: 0, y: 1, n: 1 });
             assert!(!cpu.display[0]);
@@ -1232,33 +1232,33 @@ mod tests {
             cpu.v[0] = 0;
             cpu.v[1] = 0;
             cpu.execute(Instruction::Drw { x: 0, y: 1, n: 1 });
-            assert_eq!(cpu.v[0xF], 0); // prima passata, nessuna collisione
+            assert_eq!(cpu.v[0xF], 0); // first pass, no collision
             cpu.execute(Instruction::Drw { x: 0, y: 1, n: 1 });
-            assert_eq!(cpu.v[0xF], 1); // seconda passata, collisione!
+            assert_eq!(cpu.v[0xF], 1); // second pass, collision!
         }
 
         #[test]
         fn test_drw_wraps_horizontally() {
             let mut cpu = Chip8::new();
             cpu.memory[cpu.i as usize] = 0xFF;
-            cpu.v[0] = 63; // x quasi al bordo destro
+            cpu.v[0] = 63; // x near the right edge
             cpu.v[1] = 0;
             cpu.execute(Instruction::Drw { x: 0, y: 1, n: 1 });
-            // il pixel a x=63 deve essere acceso
+            // pixel at x=63 must be on
             assert!(cpu.display[63]);
-            // il pixel wrappato a x=0 deve essere acceso
+            // the wrapped pixel at x=0 must be on
             assert!(cpu.display[0]);
         }
 
         #[test]
         fn test_drw_no_collision_resets_vf() {
             let mut cpu = Chip8::new();
-            cpu.v[0xF] = 1; // impostiamo VF a 1 manualmente
+            cpu.v[0xF] = 1; // set VF to 1 manually
             cpu.memory[cpu.i as usize] = 0xFF;
             cpu.v[0] = 0;
             cpu.v[1] = 0;
             cpu.execute(Instruction::Drw { x: 0, y: 1, n: 1 });
-            assert_eq!(cpu.v[0xF], 0); // VF deve essere resettato a 0
+            assert_eq!(cpu.v[0xF], 0); // VF must be reset to 0
         }
 
         #[test]
@@ -1358,7 +1358,7 @@ mod tests {
                 let mut cpu = Chip8::new();
                 cpu.v[0] = 0x0;
                 cpu.execute(Instruction::LdFVx { x: 0 });
-                assert_eq!(cpu.i, 0x000); // font "0" inizia a 0x000
+                assert_eq!(cpu.i, 0x000); // font "0" starts at 0x000
             }
 
             #[test]
@@ -1366,7 +1366,7 @@ mod tests {
                 let mut cpu = Chip8::new();
                 cpu.v[0] = 0x1;
                 cpu.execute(Instruction::LdFVx { x: 0 });
-                assert_eq!(cpu.i, 0x005); // font "1" inizia a 0x005
+                assert_eq!(cpu.i, 0x005); // font "1" starts at 0x005
             }
 
             #[test]
@@ -1374,7 +1374,7 @@ mod tests {
                 let mut cpu = Chip8::new();
                 cpu.v[0] = 0xF;
                 cpu.execute(Instruction::LdFVx { x: 0 });
-                assert_eq!(cpu.i, 0x04B); // font "F" inizia a 0x04B (75)
+                assert_eq!(cpu.i, 0x04B); // font "F" starts at 0x04B (75)
             }
         }
 
@@ -1407,9 +1407,9 @@ mod tests {
                 cpu.i = 0x300;
                 cpu.v[2] = 156;
                 cpu.execute(Instruction::LdBVx { x: 2 });
-                assert_eq!(cpu.memory[0x300], 1); // centinaia
-                assert_eq!(cpu.memory[0x301], 5); // decine
-                assert_eq!(cpu.memory[0x302], 6); // unità
+                assert_eq!(cpu.memory[0x300], 1); // hundreds
+                assert_eq!(cpu.memory[0x301], 5); // tens
+                assert_eq!(cpu.memory[0x302], 6); // units
             }
 
             #[test]
@@ -1463,12 +1463,12 @@ mod tests {
                 cpu.i = 0x300;
                 cpu.v[0] = 0xAA;
                 cpu.v[1] = 0xBB;
-                // salva
+                // save
                 cpu.execute(Instruction::LdIVx { x: 1 });
-                // azzera i registri
+                // clear the registers
                 cpu.v[0] = 0;
                 cpu.v[1] = 0;
-                // ricarica
+                // reload
                 cpu.execute(Instruction::LdVxI { x: 1 });
                 assert_eq!(cpu.v[0], 0xAA);
                 assert_eq!(cpu.v[1], 0xBB);
