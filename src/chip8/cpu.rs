@@ -129,6 +129,14 @@ pub enum Instruction {
     /// Set VF = collision
     Drw { x: usize, y: usize, n: u8 },
 
+    /// EX9E - SKP Vx
+    /// Skip next instruction if key with value Vx is pressed
+    Skp { x: usize },
+
+    /// EXA1 - SKNP Vx
+    /// Skip next instruction if key with value Vx is not pressed
+    Sknp { x: usize },
+
     /// Unknown opcode
     Unknown(u16),
 }
@@ -248,6 +256,8 @@ impl Chip8 {
             (0xB, _, _, _) => Instruction::JpV0 { addr: nnn },
             (0xC, _, _, _) => Instruction::Rnd { x, kk },
             (0xD, _, _, _) => Instruction::Drw { x, y, n },
+            (0xE, _, 0x9, 0xE) => Instruction::Skp { x },
+            (0xE, _, 0xA, 0x1) => Instruction::Sknp { x },
             _ => Instruction::Unknown(opcode),
         }
     }
@@ -395,6 +405,20 @@ impl Chip8 {
 
                         self.display[idx] ^= true;
                     }
+                }
+            }
+
+            Instruction::Skp { x } => {
+                let key = self.v[x] as usize;
+                if self.keys[key] {
+                    self.pc += 2;
+                }
+            }
+
+            Instruction::Sknp { x } => {
+                let key = self.v[x] as usize;
+                if !self.keys[key] {
+                    self.pc += 2;
                 }
             }
 
@@ -661,6 +685,18 @@ mod tests {
         fn test_decode_drw() {
             let cpu = Chip8::new();
             assert_eq!(cpu.decode(0xD125), Instruction::Drw { x: 1, y: 2, n: 5 });
+        }
+
+        #[test]
+        fn test_decode_skp() {
+            let cpu = Chip8::new();
+            assert_eq!(cpu.decode(0xE29E), Instruction::Skp { x: 2 });
+        }
+
+        #[test]
+        fn test_decode_sknp() {
+            let cpu = Chip8::new();
+            assert_eq!(cpu.decode(0xE2A1), Instruction::Sknp { x: 2 });
         }
     }
 
@@ -1073,6 +1109,46 @@ mod tests {
             cpu.v[1] = 0;
             cpu.execute(Instruction::Drw { x: 0, y: 1, n: 1 });
             assert_eq!(cpu.v[0xF], 0); // VF deve essere resettato a 0
+        }
+
+        #[test]
+        fn test_skp_skips_when_key_pressed() {
+            let mut cpu = Chip8::new();
+            cpu.v[2] = 0x5;
+            cpu.keys[0x5] = true;
+            let pc_before = cpu.pc;
+            cpu.execute(Instruction::Skp { x: 2 });
+            assert_eq!(cpu.pc, pc_before + 2);
+        }
+
+        #[test]
+        fn test_skp_does_not_skip_when_key_not_pressed() {
+            let mut cpu = Chip8::new();
+            cpu.v[2] = 0x5;
+            cpu.keys[0x5] = false;
+            let pc_before = cpu.pc;
+            cpu.execute(Instruction::Skp { x: 2 });
+            assert_eq!(cpu.pc, pc_before);
+        }
+
+        #[test]
+        fn test_sknp_skips_when_key_not_pressed() {
+            let mut cpu = Chip8::new();
+            cpu.v[2] = 0x5;
+            cpu.keys[0x5] = false;
+            let pc_before = cpu.pc;
+            cpu.execute(Instruction::Sknp { x: 2 });
+            assert_eq!(cpu.pc, pc_before + 2);
+        }
+
+        #[test]
+        fn test_sknp_does_not_skip_when_key_pressed() {
+            let mut cpu = Chip8::new();
+            cpu.v[2] = 0x5;
+            cpu.keys[0x5] = true;
+            let pc_before = cpu.pc;
+            cpu.execute(Instruction::Sknp { x: 2 });
+            assert_eq!(cpu.pc, pc_before);
         }
     }
 }
