@@ -166,11 +166,7 @@ impl Chip8 {
             }
 
             Instruction::Ret => {
-                if let Some(addr) = self.stack.pop() {
-                    self.pc = addr;
-                } else {
-                    eprintln!("RET called with empty stack!");
-                }
+                self.pc = self.stack.pop().expect("RET called with empty stack");
             }
 
             Instruction::Jp { addr } => {
@@ -297,7 +293,7 @@ mod tests {
             cpu.display[100] = true;
             let instruction = cpu.decode(0x00E0);
             cpu.execute(instruction);
-            assert!(cpu.display.iter().all(|&p| p == false));
+            assert!(cpu.display.iter().all(|&p| !p))
         }
 
         #[test]
@@ -379,9 +375,18 @@ mod tests {
         }
 
         #[test]
-        fn test_ret_empty_stack_does_not_panic() {
+        #[should_panic(expected = "RET called with empty stack")]
+        fn test_ret_empty_stack_panics() {
             let mut cpu = Chip8::new();
             cpu.execute(Instruction::Ret);
+        }
+
+        #[test]
+        fn test_sys_is_ignored() {
+            let mut cpu = Chip8::new();
+            let pc_before = cpu.pc;
+            cpu.execute(cpu.decode(0x0123));
+            assert_eq!(cpu.pc, pc_before);
         }
     }
 }
