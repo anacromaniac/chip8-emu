@@ -36,6 +36,7 @@ const FONTSET: [u8; FONTSET_SIZE] = [
     0xF0, 0x80, 0xF0, 0x80, 0x80, // F
 ];
 
+#[derive(Debug, PartialEq)]
 pub enum Instruction {
     /// 0NNN - SYS - Jump to a machine code routine at nnn
     /// Ignored in modern interpreters so it won't do anything
@@ -287,6 +288,64 @@ mod tests {
         cpu.fetch();
 
         assert_eq!(cpu.pc, 0x202);
+    }
+
+    mod decode {
+        use super::*;
+
+        #[test]
+        fn test_decode_cls() {
+            let cpu = Chip8::new();
+            assert_eq!(cpu.decode(0x00E0), Instruction::Cls);
+        }
+
+        #[test]
+        fn test_decode_ret() {
+            let cpu = Chip8::new();
+            assert_eq!(cpu.decode(0x00EE), Instruction::Ret);
+        }
+
+        #[test]
+        fn test_decode_sys() {
+            let cpu = Chip8::new();
+            assert_eq!(cpu.decode(0x0123), Instruction::Sys { addr: 0x123 });
+        }
+
+        #[test]
+        fn test_decode_jp() {
+            let cpu = Chip8::new();
+            assert_eq!(cpu.decode(0x1ABC), Instruction::Jp { addr: 0xABC });
+        }
+
+        #[test]
+        fn test_decode_call() {
+            let cpu = Chip8::new();
+            assert_eq!(cpu.decode(0x2ABC), Instruction::Call { addr: 0xABC });
+        }
+
+        #[test]
+        fn test_decode_ld_vx_byte() {
+            let cpu = Chip8::new();
+            assert_eq!(cpu.decode(0x6342), Instruction::LdVxByte { x: 3, kk: 0x42 });
+        }
+
+        #[test]
+        fn test_decode_add_vx_byte() {
+            let cpu = Chip8::new();
+            assert_eq!(cpu.decode(0x7205), Instruction::AddVxByte { x: 2, kk: 0x05 });
+        }
+
+        #[test]
+        fn test_decode_ld_i() {
+            let cpu = Chip8::new();
+            assert_eq!(cpu.decode(0xA123), Instruction::LdI { nnn: 0x123 });
+        }
+
+        #[test]
+        fn test_decode_unknown() {
+            let cpu = Chip8::new();
+            assert_eq!(cpu.decode(0xFFFF), Instruction::Unknown(0xFFFF));
+        }
     }
 
     mod execute {
