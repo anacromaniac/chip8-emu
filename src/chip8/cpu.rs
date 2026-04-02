@@ -54,7 +54,7 @@ pub enum Instruction {
     /// 7XKK - ADD Vx, byte - Adds the value kk to the value of register Vx, then stores the result in Vx
     AddVxByte { x: usize, kk: u8 },
     /// ANNN - LD I, addr - The value of register I is set to nnn
-    LdI { nnn: u16 },
+    LdI { addr: u16 },
     /// Unknown opcode
     Unknown(u16),
 }
@@ -157,7 +157,7 @@ impl Chip8 {
             (0x2, _, _, _) => Instruction::Call { addr: nnn },
             (0x6, _, _, _) => Instruction::LdVxByte { x, kk },
             (0x7, _, _, _) => Instruction::AddVxByte { x, kk },
-            (0xA, _, _, _) => Instruction::LdI { nnn },
+            (0xA, _, _, _) => Instruction::LdI { addr: nnn },
             _ => Instruction::Unknown(opcode),
         }
     }
@@ -193,7 +193,7 @@ impl Chip8 {
                 self.v[x] = self.v[x].wrapping_add(kk);
             }
 
-            Instruction::LdI { nnn } => {
+            Instruction::LdI { addr: nnn } => {
                 self.i = nnn;
             }
 
@@ -357,7 +357,7 @@ mod tests {
         #[test]
         fn test_decode_ld_i() {
             let cpu = Chip8::new();
-            assert_eq!(cpu.decode(0xA123), Instruction::LdI { nnn: 0x123 });
+            assert_eq!(cpu.decode(0xA123), Instruction::LdI { addr: 0x123 });
         }
 
         #[test]
@@ -404,7 +404,7 @@ mod tests {
         #[test]
         fn test_opcode_ld_i_sets_i() {
             let mut cpu = Chip8::new();
-            cpu.execute(Instruction::LdI { nnn: 0x123 });
+            cpu.execute(Instruction::LdI { addr: 0x123 });
             assert_eq!(cpu.i, 0x123);
         }
 
