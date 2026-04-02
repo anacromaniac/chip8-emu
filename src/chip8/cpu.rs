@@ -38,12 +38,12 @@ const FONTSET: [u8; FONTSET_SIZE] = [
 
 pub struct Chip8 {
     // 4KB RAM
-    pub(crate) memory: [u8; MEMORY_SIZE],
+    memory: [u8; MEMORY_SIZE],
     // V0 to VF registers
     v: [u8; NUM_REGISTERS],
 
     // Program Counter
-    pub(crate) pc: u16,
+    pc: u16,
 
     // Index Register
     i: u16,
