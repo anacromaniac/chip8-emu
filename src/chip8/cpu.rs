@@ -90,7 +90,6 @@ impl Default for Chip8 {
 }
 
 impl Chip8 {
-
     pub fn new() -> Self {
         let mut chip8 = Chip8 {
             memory: [0; MEMORY_SIZE],
@@ -290,7 +289,7 @@ mod tests {
         assert_eq!(cpu.pc, 0x202);
     }
 
-    mod opcode_execute {
+    mod execute {
         use super::*;
 
         #[test]
@@ -298,23 +297,21 @@ mod tests {
             let mut cpu = Chip8::new();
             cpu.display[0] = true;
             cpu.display[100] = true;
-            let instruction = cpu.decode(0x00E0);
-            cpu.execute(instruction);
+            cpu.execute(Instruction::Cls);
             assert!(cpu.display.iter().all(|&p| !p))
         }
 
         #[test]
         fn test_opcode_jp_sets_pc() {
             let mut cpu = Chip8::new();
-            cpu.execute(cpu.decode(0x1ABC));
+            cpu.execute(Instruction::Jp { addr: 0xABC });
             assert_eq!(cpu.pc, 0xABC);
         }
 
         #[test]
         fn test_opcode_ld_vx_sets_register() {
             let mut cpu = Chip8::new();
-            // 6XKK → sets V3 = 0x42
-            cpu.execute(cpu.decode(0x6342));
+            cpu.execute(Instruction::LdVxByte { x: 3, kk: 0x42 });
             assert_eq!(cpu.v[3], 0x42);
         }
 
@@ -322,15 +319,14 @@ mod tests {
         fn test_opcode_add_vx_adds_value() {
             let mut cpu = Chip8::new();
             cpu.v[2] = 10;
-            // 7XKK → V2 += 5
-            cpu.execute(cpu.decode(0x7205));
+            cpu.execute(Instruction::AddVxByte { x: 2, kk: 0x05 });
             assert_eq!(cpu.v[2], 15);
         }
 
         #[test]
         fn test_opcode_ld_i_sets_i() {
             let mut cpu = Chip8::new();
-            cpu.execute(cpu.decode(0xA123));
+            cpu.execute(Instruction::LdI { nnn: 0x123 });
             assert_eq!(cpu.i, 0x123);
         }
 
@@ -393,7 +389,7 @@ mod tests {
         fn test_sys_is_ignored() {
             let mut cpu = Chip8::new();
             let pc_before = cpu.pc;
-            cpu.execute(cpu.decode(0x0123));
+            cpu.execute(Instruction::Sys{ addr: 0x200 });
             assert_eq!(cpu.pc, pc_before);
         }
     }
