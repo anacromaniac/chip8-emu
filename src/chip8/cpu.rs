@@ -65,6 +65,41 @@ pub enum Instruction {
     /// 5XY0 - SE Vx, Vy
     /// Skip next instruction if Vx == Vy
     SeVxVy { x: usize, y: usize },
+    /// 8XY0 - LD Vx, Vy
+    /// Set Vx = Vy
+    LdVxVy { x: usize, y: usize },
+
+    /// 8XY1 - OR Vx, Vy
+    /// Set Vx = Vx OR Vy
+    OrVxVy { x: usize, y: usize },
+
+    /// 8XY2 - AND Vx, Vy
+    /// Set Vx = Vx AND Vy
+    AndVxVy { x: usize, y: usize },
+
+    /// 8XY3 - XOR Vx, Vy
+    /// Set Vx = Vx XOR Vy
+    XorVxVy { x: usize, y: usize },
+
+    /// 8XY4 - ADD Vx, Vy
+    /// Set Vx = Vx + Vy, VF = carry
+    AddVxVy { x: usize, y: usize },
+
+    /// 8XY5 - SUB Vx, Vy
+    /// Set Vx = Vx - Vy, VF = NOT borrow (1 if Vx > Vy, 0 otherwise)
+    SubVxVy { x: usize, y: usize },
+
+    /// 8XY6 - SHR Vx
+    /// Set Vx = Vx >> 1, VF = least significant bit before shift
+    ShrVx { x: usize },
+
+    /// 8XY7 - SUBN Vx, Vy
+    /// Set Vx = Vy - Vx, VF = NOT borrow (1 if Vy > Vx, 0 otherwise)
+    SubnVxVy { x: usize, y: usize },
+
+    /// 8XYE - SHL Vx
+    /// Set Vx = Vx << 1, VF = most significant bit before shift
+    ShlVx { x: usize },
     /// Unknown opcode
     Unknown(u16),
 }
@@ -170,6 +205,15 @@ impl Chip8 {
             (0x5, _, _, 0x0) => Instruction::SeVxVy { x, y },
             (0x6, _, _, _) => Instruction::LdVxByte { x, kk },
             (0x7, _, _, _) => Instruction::AddVxByte { x, kk },
+            (0x8, _, _, 0x0) => Instruction::LdVxVy { x, y },
+            (0x8, _, _, 0x1) => Instruction::OrVxVy { x, y },
+            (0x8, _, _, 0x2) => Instruction::AndVxVy { x, y },
+            (0x8, _, _, 0x3) => Instruction::XorVxVy { x, y },
+            (0x8, _, _, 0x4) => Instruction::AddVxVy { x, y },
+            (0x8, _, _, 0x5) => Instruction::SubVxVy { x, y },
+            (0x8, _, _, 0x6) => Instruction::ShrVx { x },
+            (0x8, _, _, 0x7) => Instruction::SubnVxVy { x, y },
+            (0x8, _, _, 0xE) => Instruction::ShlVx { x },
             (0xA, _, _, _) => Instruction::LdI { addr: nnn },
             _ => Instruction::Unknown(opcode),
         }
@@ -229,6 +273,50 @@ impl Chip8 {
                 if self.v[x] == self.v[y] {
                     self.pc += 2;
                 }
+            }
+
+            Instruction::LdVxVy { x, y } => {
+                self.v[x] = self.v[y];
+            }
+
+            Instruction::OrVxVy { x, y } => {
+                self.v[x] |= self.v[y];
+            }
+
+            Instruction::AndVxVy { x, y } => {
+                self.v[x] &= self.v[y];
+            }
+
+            Instruction::XorVxVy { x, y } => {
+                self.v[x] ^= self.v[y];
+            }
+
+            Instruction::AddVxVy { x, y } => {
+                let (result, carry) = self.v[x].overflowing_add(self.v[y]);
+                self.v[x] = result;
+                self.v[0xF] = carry as u8;
+            }
+
+            Instruction::SubVxVy { x, y } => {
+                let (result, borrow) = self.v[x].overflowing_sub(self.v[y]);
+                self.v[x] = result;
+                self.v[0xF] = !borrow as u8; // NOT borrow
+            }
+
+            Instruction::ShrVx { x } => {
+                self.v[0xF] = self.v[x] & 0x1; // salva il bit meno significativo
+                self.v[x] >>= 1;
+            }
+
+            Instruction::SubnVxVy { x, y } => {
+                let (result, borrow) = self.v[y].overflowing_sub(self.v[x]);
+                self.v[x] = result;
+                self.v[0xF] = !borrow as u8; // NOT borrow
+            }
+
+            Instruction::ShlVx { x } => {
+                self.v[0xF] = (self.v[x] >> 7) & 0x1; // salva il bit più significativo
+                self.v[x] <<= 1;
             }
 
             Instruction::Unknown(opcode) => {
@@ -418,6 +506,60 @@ mod tests {
             let cpu = Chip8::new();
             assert_eq!(cpu.decode(0x5230), Instruction::SeVxVy { x: 2, y: 3 });
         }
+
+        #[test]
+        fn test_decode_ld_vx_vy() {
+            let cpu = Chip8::new();
+            assert_eq!(cpu.decode(0x8230), Instruction::LdVxVy { x: 2, y: 3 });
+        }
+
+        #[test]
+        fn test_decode_or_vx_vy() {
+            let cpu = Chip8::new();
+            assert_eq!(cpu.decode(0x8231), Instruction::OrVxVy { x: 2, y: 3 });
+        }
+
+        #[test]
+        fn test_decode_and_vx_vy() {
+            let cpu = Chip8::new();
+            assert_eq!(cpu.decode(0x8232), Instruction::AndVxVy { x: 2, y: 3 });
+        }
+
+        #[test]
+        fn test_decode_xor_vx_vy() {
+            let cpu = Chip8::new();
+            assert_eq!(cpu.decode(0x8233), Instruction::XorVxVy { x: 2, y: 3 });
+        }
+
+        #[test]
+        fn test_decode_add_vx_vy() {
+            let cpu = Chip8::new();
+            assert_eq!(cpu.decode(0x8234), Instruction::AddVxVy { x: 2, y: 3 });
+        }
+
+        #[test]
+        fn test_decode_sub_vx_vy() {
+            let cpu = Chip8::new();
+            assert_eq!(cpu.decode(0x8235), Instruction::SubVxVy { x: 2, y: 3 });
+        }
+
+        #[test]
+        fn test_decode_shr_vx() {
+            let cpu = Chip8::new();
+            assert_eq!(cpu.decode(0x8236), Instruction::ShrVx { x: 2 });
+        }
+
+        #[test]
+        fn test_decode_subn_vx_vy() {
+            let cpu = Chip8::new();
+            assert_eq!(cpu.decode(0x8237), Instruction::SubnVxVy { x: 2, y: 3 });
+        }
+
+        #[test]
+        fn test_decode_shl_vx() {
+            let cpu = Chip8::new();
+            assert_eq!(cpu.decode(0x823E), Instruction::ShlVx { x: 2 });
+        }
     }
 
     mod execute {
@@ -595,6 +737,125 @@ mod tests {
             let pc_before = cpu.pc;
             cpu.execute(Instruction::SeVxVy { x: 2, y: 3 });
             assert_eq!(cpu.pc, pc_before);
+        }
+
+        #[test]
+        fn test_ld_vx_vy_copies_register() {
+            let mut cpu = Chip8::new();
+            cpu.v[3] = 0x42;
+            cpu.execute(Instruction::LdVxVy { x: 2, y: 3 });
+            assert_eq!(cpu.v[2], 0x42);
+        }
+
+        #[test]
+        fn test_or_vx_vy() {
+            let mut cpu = Chip8::new();
+            cpu.v[2] = 0b10110000;
+            cpu.v[3] = 0b11001100;
+            cpu.execute(Instruction::OrVxVy { x: 2, y: 3 });
+            assert_eq!(cpu.v[2], 0b11111100);
+        }
+
+
+        #[test]
+        fn test_and_vx_vy() {
+            let mut cpu = Chip8::new();
+            cpu.v[2] = 0b10110000;
+            cpu.v[3] = 0b11001100;
+            cpu.execute(Instruction::AndVxVy { x: 2, y: 3 });
+            assert_eq!(cpu.v[2], 0b10000000);
+        }
+
+        #[test]
+        fn test_xor_vx_vy() {
+            let mut cpu = Chip8::new();
+            cpu.v[2] = 0b10110000;
+            cpu.v[3] = 0b11001100;
+            cpu.execute(Instruction::XorVxVy { x: 2, y: 3 });
+            assert_eq!(cpu.v[2], 0b01111100);
+        }
+
+        #[test]
+        fn test_add_vx_vy_no_carry() {
+            let mut cpu = Chip8::new();
+            cpu.v[2] = 10;
+            cpu.v[3] = 20;
+            cpu.execute(Instruction::AddVxVy { x: 2, y: 3 });
+            assert_eq!(cpu.v[2], 30);
+            assert_eq!(cpu.v[0xF], 0); // no carry
+        }
+
+        #[test]
+        fn test_add_vx_vy_with_carry() {
+            let mut cpu = Chip8::new();
+            cpu.v[2] = 200;
+            cpu.v[3] = 100;
+            cpu.execute(Instruction::AddVxVy { x: 2, y: 3 });
+            assert_eq!(cpu.v[2], 44); // 300 - 256 = 44
+            assert_eq!(cpu.v[0xF], 1); // carry
+        }
+
+        #[test]
+        fn test_sub_vx_vy_no_borrow() {
+            let mut cpu = Chip8::new();
+            cpu.v[2] = 100;
+            cpu.v[3] = 40;
+            cpu.execute(Instruction::SubVxVy { x: 2, y: 3 });
+            assert_eq!(cpu.v[2], 60);
+            assert_eq!(cpu.v[0xF], 1); // NOT borrow = 1 perché Vx > Vy
+        }
+
+        #[test]
+        fn test_sub_vx_vy_with_borrow() {
+            let mut cpu = Chip8::new();
+            cpu.v[2] = 40;
+            cpu.v[3] = 100;
+            cpu.execute(Instruction::SubVxVy { x: 2, y: 3 });
+            assert_eq!(cpu.v[0xF], 0); // NOT borrow = 0 perché Vx < Vy
+        }
+
+        #[test]
+        fn test_shr_vx_shifts_right() {
+            let mut cpu = Chip8::new();
+            cpu.v[2] = 0b00001010;
+            cpu.execute(Instruction::ShrVx { x: 2 });
+            assert_eq!(cpu.v[2], 0b00000101);
+            assert_eq!(cpu.v[0xF], 0); // bit perso era 0
+        }
+
+        #[test]
+        fn test_shr_vx_saves_lost_bit() {
+            let mut cpu = Chip8::new();
+            cpu.v[2] = 0b00001011;
+            cpu.execute(Instruction::ShrVx { x: 2 });
+            assert_eq!(cpu.v[0xF], 1); // bit perso era 1
+        }
+
+        #[test]
+        fn test_subn_vx_vy_no_borrow() {
+            let mut cpu = Chip8::new();
+            cpu.v[2] = 40;
+            cpu.v[3] = 100;
+            cpu.execute(Instruction::SubnVxVy { x: 2, y: 3 });
+            assert_eq!(cpu.v[2], 60); // Vy - Vx = 100 - 40
+            assert_eq!(cpu.v[0xF], 1); // NOT borrow = 1 perché Vy > Vx
+        }
+
+        #[test]
+        fn test_shl_vx_shifts_left() {
+            let mut cpu = Chip8::new();
+            cpu.v[2] = 0b00000101;
+            cpu.execute(Instruction::ShlVx { x: 2 });
+            assert_eq!(cpu.v[2], 0b00001010);
+            assert_eq!(cpu.v[0xF], 0); // bit perso era 0
+        }
+
+        #[test]
+        fn test_shl_vx_saves_lost_bit() {
+            let mut cpu = Chip8::new();
+            cpu.v[2] = 0b10000001;
+            cpu.execute(Instruction::ShlVx { x: 2 });
+            assert_eq!(cpu.v[0xF], 1); // bit perso era 1
         }
     }
 }
