@@ -42,8 +42,12 @@ pub enum Instruction {
     Sys { addr: u16 },
     /// 00E0 - CLS - Clear the display
     Cls,
+    /// 00EE - RET - Return from subroutine
+    Ret,
     /// 1NNN - JP addr - Jump to location nnn
     Jp { addr: u16 },
+    /// 2NNN - CALL addr - Call subroutine at nnn
+    Call { addr: u16 },
     /// 6XKK - LD Vx, byte - The interpreter puts the value kk into register Vx
     LdVxByte { x: usize, kk: u8 },
     /// 7XKK - ADD Vx, byte - Adds the value kk to the value of register Vx, then stores the result in Vx
@@ -140,8 +144,10 @@ impl Chip8 {
             opcode & 0x000F,
         ) {
             (0x0, 0x0, 0xE, 0x0) => Instruction::Cls,
+            (0x0, 0x0, 0xE, 0xE) => Instruction::Ret,
             (0x0, _, _, _)       => Instruction::Sys { addr: nnn },
             (0x1, _, _, _)       => Instruction::Jp { addr: nnn },
+            (0x2, _, _, _)       => Instruction::Call { addr: nnn },
             (0x6, _, _, _)       => Instruction::LdVxByte { x, kk },
             (0x7, _, _, _)       => Instruction::AddVxByte { x, kk },
             (0xA, _, _, _)       => Instruction::LdI { nnn },
@@ -159,7 +165,20 @@ impl Chip8 {
                 self.display = [false; DISPLAY_WIDTH * DISPLAY_HEIGHT];
             }
 
+            Instruction::Ret => {
+                if let Some(addr) = self.stack.pop() {
+                    self.pc = addr;
+                } else {
+                    eprintln!("RET called with empty stack!");
+                }
+            }
+
             Instruction::Jp { addr } => {
+                self.pc = addr;
+            }
+
+            Instruction::Call { addr } => {
+                self.stack.push(self.pc);
                 self.pc = addr;
             }
 
@@ -268,7 +287,7 @@ mod tests {
         assert_eq!(cpu.pc, 0x202);
     }
 
-    mod opcodes {
+    mod opcode_execute {
         use super::*;
 
         #[test]
@@ -316,6 +335,53 @@ mod tests {
         fn test_unknown_opcode_does_not_panic() {
             let mut cpu = Chip8::new();
             cpu.execute(Instruction::Unknown(0xFFFF));
+        }
+
+        #[test]
+        fn test_call_pushes_pc_to_stack() {
+            let mut cpu = Chip8::new();
+            cpu.pc = 0x200;
+            cpu.execute(Instruction::Call { addr: 0x300 });
+            assert_eq!(cpu.stack.last().copied(), Some(0x200));
+        }
+
+        #[test]
+        fn test_call_sets_pc_to_addr() {
+            let mut cpu = Chip8::new();
+            cpu.execute(Instruction::Call { addr: 0x300 });
+            assert_eq!(cpu.pc, 0x300);
+        }
+
+        #[test]
+        fn test_ret_restores_pc_from_stack() {
+            let mut cpu = Chip8::new();
+            cpu.stack.push(0x200);
+            cpu.execute(Instruction::Ret);
+            assert_eq!(cpu.pc, 0x200);
+        }
+
+        #[test]
+        fn test_ret_pops_stack() {
+            let mut cpu = Chip8::new();
+            cpu.stack.push(0x200);
+            cpu.execute(Instruction::Ret);
+            assert!(cpu.stack.is_empty());
+        }
+
+        #[test]
+        fn test_call_and_ret_roundtrip() {
+            let mut cpu = Chip8::new();
+            cpu.pc = 0x200;
+            cpu.execute(Instruction::Call { addr: 0x300 });
+            assert_eq!(cpu.pc, 0x300);
+            cpu.execute(Instruction::Ret);
+            assert_eq!(cpu.pc, 0x200);
+        }
+
+        #[test]
+        fn test_ret_empty_stack_does_not_panic() {
+            let mut cpu = Chip8::new();
+            cpu.execute(Instruction::Ret);
         }
     }
 }
