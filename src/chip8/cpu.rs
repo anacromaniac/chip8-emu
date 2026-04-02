@@ -208,86 +208,102 @@ impl Chip8 {
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_new_pc_starts_at_rom_start() {
-        let chip8 = Chip8::new();
-        assert_eq!(chip8.pc, ROM_START);
+    mod boot {
+        use super::*;
+
+        #[test]
+        fn test_new_pc_starts_at_rom_start() {
+            let chip8 = Chip8::new();
+            assert_eq!(chip8.pc, ROM_START);
+        }
+
+        #[test]
+        fn test_new_memory_is_zeroed() {
+            let chip8 = Chip8::new();
+            assert_eq!(chip8.memory[ROM_START as usize], 0);
+        }
     }
 
-    #[test]
-    fn test_new_memory_is_zeroed() {
-        let chip8 = Chip8::new();
-        assert_eq!(chip8.memory[ROM_START as usize], 0);
+    mod rom_loading {
+        use super::*;
+
+        #[test]
+        fn test_load_rom_ok() {
+            let mut cpu = Chip8::new();
+            let rom = vec![0x43, 0x6F, 0x77, 0x67, 0x6F, 0x64];
+            let result = cpu.load_rom(&rom);
+            assert!(result.is_ok());
+        }
+
+        #[test]
+        fn test_load_rom_data_in_memory() {
+            let mut cpu = Chip8::new();
+            let rom = vec![0x43, 0x6F, 0x77, 0x67, 0x6F, 0x64];
+            cpu.load_rom(&rom).unwrap();
+            assert_eq!(cpu.memory[0x200], 0x43);
+            assert_eq!(cpu.memory[0x201], 0x6F);
+            assert_eq!(cpu.memory[0x202], 0x77);
+            assert_eq!(cpu.memory[0x203], 0x67);
+            assert_eq!(cpu.memory[0x204], 0x6F);
+            assert_eq!(cpu.memory[0x205], 0x64);
+        }
+
+        #[test]
+        fn test_load_rom_too_large() {
+            let mut cpu = Chip8::new();
+            let rom = vec![0u8; 4000];
+            let result = cpu.load_rom(&rom);
+            assert!(result.is_err());
+        }
     }
 
-    #[test]
-    fn test_load_rom_ok() {
-        let mut cpu = Chip8::new();
-        let rom = vec![0x43, 0x6F, 0x77, 0x67, 0x6F, 0x64];
-        let result = cpu.load_rom(&rom);
-        assert!(result.is_ok());
+    mod fontset {
+        use super::*;
+
+        #[test]
+        fn test_fontset_loaded_at_start() {
+            let cpu = Chip8::new();
+            // "0" starts at 0x000, first byte is 0xF0
+            assert_eq!(cpu.memory[0x000], 0xF0);
+            // "1" starts at 0x005, first byte is 0x20
+            assert_eq!(cpu.memory[0x005], 0x20);
+            // "F" starts at 0x04B (75), first byte is 0xF0
+            assert_eq!(cpu.memory[0x04B], 0xF0);
+        }
+
+        #[test]
+        fn test_fontset_not_overwritten_by_rom() {
+            let mut cpu = Chip8::new();
+            let rom = vec![0x12, 0x00];
+            cpu.load_rom(&rom).unwrap();
+            assert_eq!(cpu.memory[0x000], 0xF0);
+        }
     }
 
-    #[test]
-    fn test_load_rom_data_in_memory() {
-        let mut cpu = Chip8::new();
-        let rom = vec![0x43, 0x6F, 0x77, 0x67, 0x6F, 0x64];
-        cpu.load_rom(&rom).unwrap();
-        assert_eq!(cpu.memory[0x200], 0x43);
-        assert_eq!(cpu.memory[0x201], 0x6F);
-        assert_eq!(cpu.memory[0x202], 0x77);
-        assert_eq!(cpu.memory[0x203], 0x67);
-        assert_eq!(cpu.memory[0x204], 0x6F);
-        assert_eq!(cpu.memory[0x205], 0x64);
-    }
+    mod fetch {
+        use super::*;
 
-    #[test]
-    fn test_load_rom_too_large() {
-        let mut cpu = Chip8::new();
-        let rom = vec![0u8; 4000];
-        let result = cpu.load_rom(&rom);
-        assert!(result.is_err());
-    }
+        #[test]
+        fn test_fetch_reads_two_bytes() {
+            let mut cpu = Chip8::new();
+            cpu.memory[0x200] = 0x12;
+            cpu.memory[0x201] = 0x00;
 
-    #[test]
-    fn test_fontset_loaded_at_start() {
-        let cpu = Chip8::new();
-        // "0" starts at 0x000, first byte is 0xF0
-        assert_eq!(cpu.memory[0x000], 0xF0);
-        // "1" starts at 0x005, first byte is 0x20
-        assert_eq!(cpu.memory[0x005], 0x20);
-        // "F" starts at 0x04B (75), first byte is 0xF0
-        assert_eq!(cpu.memory[0x04B], 0xF0);
-    }
+            let opcode = cpu.fetch();
 
-    #[test]
-    fn test_fontset_not_overwritten_by_rom() {
-        let mut cpu = Chip8::new();
-        let rom = vec![0x12, 0x00];
-        cpu.load_rom(&rom).unwrap();
-        assert_eq!(cpu.memory[0x000], 0xF0);
-    }
+            assert_eq!(opcode, 0x1200);
+        }
 
-    #[test]
-    fn test_fetch_reads_two_bytes() {
-        let mut cpu = Chip8::new();
-        cpu.memory[0x200] = 0x12;
-        cpu.memory[0x201] = 0x00;
+        #[test]
+        fn test_fetch_advances_pc() {
+            let mut cpu = Chip8::new();
+            cpu.memory[0x200] = 0x12;
+            cpu.memory[0x201] = 0x00;
 
-        let opcode = cpu.fetch();
+            cpu.fetch();
 
-        assert_eq!(opcode, 0x1200);
-    }
-
-    #[test]
-    fn test_fetch_advances_pc() {
-        let mut cpu = Chip8::new();
-        cpu.memory[0x200] = 0x12;
-        cpu.memory[0x201] = 0x00;
-
-        cpu.fetch();
-
-        assert_eq!(cpu.pc, 0x202);
+            assert_eq!(cpu.pc, 0x202);
+        }
     }
 
     mod decode {
@@ -332,7 +348,10 @@ mod tests {
         #[test]
         fn test_decode_add_vx_byte() {
             let cpu = Chip8::new();
-            assert_eq!(cpu.decode(0x7205), Instruction::AddVxByte { x: 2, kk: 0x05 });
+            assert_eq!(
+                cpu.decode(0x7205),
+                Instruction::AddVxByte { x: 2, kk: 0x05 }
+            );
         }
 
         #[test]
@@ -448,7 +467,7 @@ mod tests {
         fn test_sys_is_ignored() {
             let mut cpu = Chip8::new();
             let pc_before = cpu.pc;
-            cpu.execute(Instruction::Sys{ addr: 0x200 });
+            cpu.execute(Instruction::Sys { addr: 0x200 });
             assert_eq!(cpu.pc, pc_before);
         }
     }
