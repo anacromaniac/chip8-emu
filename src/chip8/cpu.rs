@@ -116,6 +116,14 @@ pub enum Instruction {
     /// Skip next instruction if Vx != Vy
     SneVxVy { x: usize, y: usize },
 
+    /// BNNN - JP V0, addr
+    /// Jump to location NNN + V0
+    JpV0 { addr: u16 },
+
+    /// CXKK - RND Vx, byte
+    /// Set Vx = random byte AND kk
+    Rnd { x: usize, kk: u8 },
+
     /// Unknown opcode
     Unknown(u16),
 }
@@ -232,6 +240,8 @@ impl Chip8 {
             (0x8, _, _, 0xE) => Instruction::ShlVx { x },
             (0x9, _, _, 0x0) => Instruction::SneVxVy { x, y },
             (0xA, _, _, _) => Instruction::LdI { addr: nnn },
+            (0xB, _, _, _) => Instruction::JpV0 { addr: nnn },
+            (0xC, _, _, _) => Instruction::Rnd { x, kk },
             _ => Instruction::Unknown(opcode),
         }
     }
@@ -321,7 +331,7 @@ impl Chip8 {
             }
 
             Instruction::ShrVx { x } => {
-                self.v[0xF] = self.v[x] & 0x1; // salva il bit meno significativo
+                self.v[0xF] = self.v[x] & 0x1;
                 self.v[x] >>= 1;
             }
 
@@ -332,7 +342,7 @@ impl Chip8 {
             }
 
             Instruction::ShlVx { x } => {
-                self.v[0xF] = (self.v[x] >> 7) & 0x1; // salva il bit più significativo
+                self.v[0xF] = (self.v[x] >> 7) & 0x1;
                 self.v[x] <<= 1;
             }
 
@@ -340,6 +350,15 @@ impl Chip8 {
                 if self.v[x] != self.v[y] {
                     self.pc += 2;
                 }
+            }
+
+            Instruction::JpV0 { addr } => {
+                self.pc = addr + self.v[0] as u16;
+            }
+
+            Instruction::Rnd { x, kk } => {
+                let random: u8 = rand::random::<u8>();
+                self.v[x] = random & kk;
             }
 
             Instruction::Unknown(opcode) => {
@@ -588,6 +607,18 @@ mod tests {
         fn test_decode_sne_vx_vy() {
             let cpu = Chip8::new();
             assert_eq!(cpu.decode(0x9230), Instruction::SneVxVy { x: 2, y: 3 });
+        }
+
+        #[test]
+        fn test_decode_jp_v0() {
+            let cpu = Chip8::new();
+            assert_eq!(cpu.decode(0xB123), Instruction::JpV0 { addr: 0x123 });
+        }
+
+        #[test]
+        fn test_decode_rnd() {
+            let cpu = Chip8::new();
+            assert_eq!(cpu.decode(0xC20F), Instruction::Rnd { x: 2, kk: 0x0F });
         }
     }
 
@@ -849,7 +880,7 @@ mod tests {
             cpu.v[2] = 0b00001010;
             cpu.execute(Instruction::ShrVx { x: 2 });
             assert_eq!(cpu.v[2], 0b00000101);
-            assert_eq!(cpu.v[0xF], 0); // bit perso era 0
+            assert_eq!(cpu.v[0xF], 0);
         }
 
         #[test]
@@ -857,7 +888,7 @@ mod tests {
             let mut cpu = Chip8::new();
             cpu.v[2] = 0b00001011;
             cpu.execute(Instruction::ShrVx { x: 2 });
-            assert_eq!(cpu.v[0xF], 1); // bit perso era 1
+            assert_eq!(cpu.v[0xF], 1);
         }
 
         #[test]
@@ -876,7 +907,7 @@ mod tests {
             cpu.v[2] = 0b00000101;
             cpu.execute(Instruction::ShlVx { x: 2 });
             assert_eq!(cpu.v[2], 0b00001010);
-            assert_eq!(cpu.v[0xF], 0); // bit perso era 0
+            assert_eq!(cpu.v[0xF], 0);
         }
 
         #[test]
@@ -884,7 +915,7 @@ mod tests {
             let mut cpu = Chip8::new();
             cpu.v[2] = 0b10000001;
             cpu.execute(Instruction::ShlVx { x: 2 });
-            assert_eq!(cpu.v[0xF], 1); // bit perso era 1
+            assert_eq!(cpu.v[0xF], 1);
         }
 
         #[test]
@@ -905,6 +936,38 @@ mod tests {
             let pc_before = cpu.pc;
             cpu.execute(Instruction::SneVxVy { x: 2, y: 3 });
             assert_eq!(cpu.pc, pc_before);
+        }
+
+        #[test]
+        fn test_jp_v0_jumps_to_addr_plus_v0() {
+            let mut cpu = Chip8::new();
+            cpu.v[0] = 0x10;
+            cpu.execute(Instruction::JpV0 { addr: 0x200 });
+            assert_eq!(cpu.pc, 0x210);
+        }
+
+        #[test]
+        fn test_jp_v0_with_zero_offset() {
+            let mut cpu = Chip8::new();
+            cpu.v[0] = 0;
+            cpu.execute(Instruction::JpV0 { addr: 0x300 });
+            assert_eq!(cpu.pc, 0x300);
+        }
+
+        #[test]
+        fn test_rnd_result_is_masked_by_kk() {
+            let mut cpu = Chip8::new();
+            for _ in 0..100 {
+                cpu.execute(Instruction::Rnd { x: 0, kk: 0x0F });
+                assert!(cpu.v[0] <= 0x0F);
+            }
+        }
+
+        #[test]
+        fn test_rnd_with_zero_mask_is_always_zero() {
+            let mut cpu = Chip8::new();
+            cpu.execute(Instruction::Rnd { x: 0, kk: 0x00 });
+            assert_eq!(cpu.v[0], 0);
         }
     }
 }
