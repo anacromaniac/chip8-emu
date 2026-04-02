@@ -83,7 +83,14 @@ pub struct Chip8 {
     keys: [bool; NUM_KEYS],
 }
 
+impl Default for Chip8 {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Chip8 {
+
     pub fn new() -> Self {
         let mut chip8 = Chip8 {
             memory: [0; MEMORY_SIZE],
