@@ -609,10 +609,7 @@ mod tests {
             let mut cpu = Chip8::new();
             cpu.memory[0x200] = 0x12;
             cpu.memory[0x201] = 0x00;
-
-            let opcode = cpu.fetch();
-
-            assert_eq!(opcode, 0x1200);
+            assert_eq!(cpu.fetch(), 0x1200);
         }
 
         #[test]
@@ -620,15 +617,19 @@ mod tests {
             let mut cpu = Chip8::new();
             cpu.memory[0x200] = 0x12;
             cpu.memory[0x201] = 0x00;
-
             cpu.fetch();
-
             assert_eq!(cpu.pc, 0x202);
         }
     }
 
     mod decode {
         use super::*;
+
+        #[test]
+        fn test_decode_sys() {
+            let cpu = Chip8::new();
+            assert_eq!(cpu.decode(0x0123), Instruction::Sys { addr: 0x123 });
+        }
 
         #[test]
         fn test_decode_cls() {
@@ -643,12 +644,6 @@ mod tests {
         }
 
         #[test]
-        fn test_decode_sys() {
-            let cpu = Chip8::new();
-            assert_eq!(cpu.decode(0x0123), Instruction::Sys { addr: 0x123 });
-        }
-
-        #[test]
         fn test_decode_jp() {
             let cpu = Chip8::new();
             assert_eq!(cpu.decode(0x1ABC), Instruction::Jp { addr: 0xABC });
@@ -658,33 +653,6 @@ mod tests {
         fn test_decode_call() {
             let cpu = Chip8::new();
             assert_eq!(cpu.decode(0x2ABC), Instruction::Call { addr: 0xABC });
-        }
-
-        #[test]
-        fn test_decode_ld_vx_byte() {
-            let cpu = Chip8::new();
-            assert_eq!(cpu.decode(0x6342), Instruction::LdVxByte { x: 3, kk: 0x42 });
-        }
-
-        #[test]
-        fn test_decode_add_vx_byte() {
-            let cpu = Chip8::new();
-            assert_eq!(
-                cpu.decode(0x7205),
-                Instruction::AddVxByte { x: 2, kk: 0x05 }
-            );
-        }
-
-        #[test]
-        fn test_decode_ld_i() {
-            let cpu = Chip8::new();
-            assert_eq!(cpu.decode(0xA123), Instruction::LdI { addr: 0x123 });
-        }
-
-        #[test]
-        fn test_decode_unknown() {
-            let cpu = Chip8::new();
-            assert_eq!(cpu.decode(0xFFFF), Instruction::Unknown(0xFFFF));
         }
 
         #[test]
@@ -703,6 +671,18 @@ mod tests {
         fn test_decode_se_vx_vy() {
             let cpu = Chip8::new();
             assert_eq!(cpu.decode(0x5230), Instruction::SeVxVy { x: 2, y: 3 });
+        }
+
+        #[test]
+        fn test_decode_ld_vx_byte() {
+            let cpu = Chip8::new();
+            assert_eq!(cpu.decode(0x6342), Instruction::LdVxByte { x: 3, kk: 0x42 });
+        }
+
+        #[test]
+        fn test_decode_add_vx_byte() {
+            let cpu = Chip8::new();
+            assert_eq!(cpu.decode(0x7205), Instruction::AddVxByte { x: 2, kk: 0x05 });
         }
 
         #[test]
@@ -766,6 +746,12 @@ mod tests {
         }
 
         #[test]
+        fn test_decode_ld_i() {
+            let cpu = Chip8::new();
+            assert_eq!(cpu.decode(0xA123), Instruction::LdI { addr: 0x123 });
+        }
+
+        #[test]
         fn test_decode_jp_v0() {
             let cpu = Chip8::new();
             assert_eq!(cpu.decode(0xB123), Instruction::JpV0 { addr: 0x123 });
@@ -802,6 +788,12 @@ mod tests {
         }
 
         #[test]
+        fn test_decode_ld_vx_k() {
+            let cpu = Chip8::new();
+            assert_eq!(cpu.decode(0xF20A), Instruction::LdVxK { x: 2 });
+        }
+
+        #[test]
         fn test_decode_ld_dt_vx() {
             let cpu = Chip8::new();
             assert_eq!(cpu.decode(0xF215), Instruction::LdDtVx { x: 2 });
@@ -826,12 +818,6 @@ mod tests {
         }
 
         #[test]
-        fn test_decode_ld_vx_k() {
-            let cpu = Chip8::new();
-            assert_eq!(cpu.decode(0xF20A), Instruction::LdVxK { x: 2 });
-        }
-
-        #[test]
         fn test_decode_ld_b_vx() {
             let cpu = Chip8::new();
             assert_eq!(cpu.decode(0xF233), Instruction::LdBVx { x: 2 });
@@ -848,457 +834,556 @@ mod tests {
             let cpu = Chip8::new();
             assert_eq!(cpu.decode(0xF265), Instruction::LdVxI { x: 2 });
         }
+
+        #[test]
+        fn test_decode_unknown() {
+            let cpu = Chip8::new();
+            assert_eq!(cpu.decode(0xFFFF), Instruction::Unknown(0xFFFF));
+        }
     }
 
     mod execute {
         use super::*;
 
-        #[test]
-        fn test_opcode_cls_clears_display() {
-            let mut cpu = Chip8::new();
-            cpu.display[0] = true;
-            cpu.display[100] = true;
-            cpu.execute(Instruction::Cls);
-            assert!(cpu.display.iter().all(|&p| !p))
+        mod sys {
+            use super::*;
+
+            #[test]
+            fn test_sys_is_ignored() {
+                let mut cpu = Chip8::new();
+                let pc_before = cpu.pc;
+                cpu.execute(Instruction::Sys { addr: 0x200 });
+                assert_eq!(cpu.pc, pc_before);
+            }
         }
 
-        #[test]
-        fn test_opcode_jp_sets_pc() {
-            let mut cpu = Chip8::new();
-            cpu.execute(Instruction::Jp { addr: 0xABC });
-            assert_eq!(cpu.pc, 0xABC);
+        mod cls {
+            use super::*;
+
+            #[test]
+            fn test_cls_clears_display() {
+                let mut cpu = Chip8::new();
+                cpu.display[0] = true;
+                cpu.display[100] = true;
+                cpu.execute(Instruction::Cls);
+                assert!(cpu.display.iter().all(|&p| !p));
+            }
         }
 
-        #[test]
-        fn test_opcode_ld_vx_sets_register() {
-            let mut cpu = Chip8::new();
-            cpu.execute(Instruction::LdVxByte { x: 3, kk: 0x42 });
-            assert_eq!(cpu.v[3], 0x42);
+        mod ret {
+            use super::*;
+
+            #[test]
+            fn test_ret_restores_pc_from_stack() {
+                let mut cpu = Chip8::new();
+                cpu.stack.push(0x200);
+                cpu.execute(Instruction::Ret);
+                assert_eq!(cpu.pc, 0x200);
+            }
+
+            #[test]
+            fn test_ret_pops_stack() {
+                let mut cpu = Chip8::new();
+                cpu.stack.push(0x200);
+                cpu.execute(Instruction::Ret);
+                assert!(cpu.stack.is_empty());
+            }
+
+            #[test]
+            #[should_panic(expected = "RET called with empty stack")]
+            fn test_ret_empty_stack_panics() {
+                let mut cpu = Chip8::new();
+                cpu.execute(Instruction::Ret);
+            }
         }
 
-        #[test]
-        fn test_opcode_add_vx_adds_value() {
-            let mut cpu = Chip8::new();
-            cpu.v[2] = 10;
-            cpu.execute(Instruction::AddVxByte { x: 2, kk: 0x05 });
-            assert_eq!(cpu.v[2], 15);
+        mod jp {
+            use super::*;
+
+            #[test]
+            fn test_jp_sets_pc() {
+                let mut cpu = Chip8::new();
+                cpu.execute(Instruction::Jp { addr: 0xABC });
+                assert_eq!(cpu.pc, 0xABC);
+            }
         }
 
-        #[test]
-        fn test_opcode_add_vx_wraps_on_overflow() {
-            let mut cpu = Chip8::new();
-            cpu.v[0] = 0xFF;
-            cpu.execute(Instruction::AddVxByte { x: 0, kk: 0x01 });
-            assert_eq!(cpu.v[0], 0x00);
-        }
+        mod call {
+            use super::*;
 
-        #[test]
-        fn test_opcode_ld_i_sets_i() {
-            let mut cpu = Chip8::new();
-            cpu.execute(Instruction::LdI { addr: 0x123 });
-            assert_eq!(cpu.i, 0x123);
-        }
-
-        #[test]
-        #[should_panic(expected = "Unknown opcode: 0xFFFF")]
-        fn test_unknown_opcode_panics() {
-            let mut cpu = Chip8::new();
-            cpu.execute(Instruction::Unknown(0xFFFF));
-        }
-
-        #[test]
-        fn test_call_pushes_pc_to_stack() {
-            let mut cpu = Chip8::new();
-            cpu.pc = 0x200;
-            cpu.execute(Instruction::Call { addr: 0x300 });
-            assert_eq!(cpu.stack.last().copied(), Some(0x200));
-        }
-
-        #[test]
-        fn test_call_sets_pc_to_addr() {
-            let mut cpu = Chip8::new();
-            cpu.execute(Instruction::Call { addr: 0x300 });
-            assert_eq!(cpu.pc, 0x300);
-        }
-
-        #[test]
-        fn test_ret_restores_pc_from_stack() {
-            let mut cpu = Chip8::new();
-            cpu.stack.push(0x200);
-            cpu.execute(Instruction::Ret);
-            assert_eq!(cpu.pc, 0x200);
-        }
-
-        #[test]
-        fn test_ret_pops_stack() {
-            let mut cpu = Chip8::new();
-            cpu.stack.push(0x200);
-            cpu.execute(Instruction::Ret);
-            assert!(cpu.stack.is_empty());
-        }
-
-        #[test]
-        fn test_call_and_ret_roundtrip() {
-            let mut cpu = Chip8::new();
-            cpu.pc = 0x200;
-            cpu.execute(Instruction::Call { addr: 0x300 });
-            assert_eq!(cpu.pc, 0x300);
-            cpu.execute(Instruction::Ret);
-            assert_eq!(cpu.pc, 0x200);
-        }
-
-        #[test]
-        #[should_panic(expected = "RET called with empty stack")]
-        fn test_ret_empty_stack_panics() {
-            let mut cpu = Chip8::new();
-            cpu.execute(Instruction::Ret);
-        }
-
-        #[test]
-        #[should_panic(expected = "CALL stack overflow")]
-        fn test_call_stack_overflow_panics() {
-            let mut cpu = Chip8::new();
-            for _ in 0..=STACK_SIZE {
+            #[test]
+            fn test_call_pushes_pc_to_stack() {
+                let mut cpu = Chip8::new();
+                cpu.pc = 0x200;
                 cpu.execute(Instruction::Call { addr: 0x300 });
+                assert_eq!(cpu.stack.last().copied(), Some(0x200));
+            }
+
+            #[test]
+            fn test_call_sets_pc_to_addr() {
+                let mut cpu = Chip8::new();
+                cpu.execute(Instruction::Call { addr: 0x300 });
+                assert_eq!(cpu.pc, 0x300);
+            }
+
+            #[test]
+            fn test_call_and_ret_roundtrip() {
+                let mut cpu = Chip8::new();
+                cpu.pc = 0x200;
+                cpu.execute(Instruction::Call { addr: 0x300 });
+                assert_eq!(cpu.pc, 0x300);
+                cpu.execute(Instruction::Ret);
+                assert_eq!(cpu.pc, 0x200);
+            }
+
+            #[test]
+            #[should_panic(expected = "CALL stack overflow")]
+            fn test_call_stack_overflow_panics() {
+                let mut cpu = Chip8::new();
+                for _ in 0..=STACK_SIZE {
+                    cpu.execute(Instruction::Call { addr: 0x300 });
+                }
             }
         }
 
-        #[test]
-        fn test_sys_is_ignored() {
-            let mut cpu = Chip8::new();
-            let pc_before = cpu.pc;
-            cpu.execute(Instruction::Sys { addr: 0x200 });
-            assert_eq!(cpu.pc, pc_before);
-        }
+        mod se {
+            use super::*;
 
-        #[test]
-        fn test_se_skips_when_equal() {
-            let mut cpu = Chip8::new();
-            cpu.v[2] = 0x10;
-            let pc_before = cpu.pc;
-            cpu.execute(Instruction::Se { x: 2, kk: 0x10 });
-            assert_eq!(cpu.pc, pc_before + 2);
-        }
+            #[test]
+            fn test_se_skips_when_equal() {
+                let mut cpu = Chip8::new();
+                cpu.v[2] = 0x10;
+                let pc_before = cpu.pc;
+                cpu.execute(Instruction::Se { x: 2, kk: 0x10 });
+                assert_eq!(cpu.pc, pc_before + 2);
+            }
 
-        #[test]
-        fn test_se_does_not_skip_when_not_equal() {
-            let mut cpu = Chip8::new();
-            cpu.v[2] = 0x10;
-            let pc_before = cpu.pc;
-            cpu.execute(Instruction::Se { x: 2, kk: 0x20 });
-            assert_eq!(cpu.pc, pc_before);
-        }
-
-        #[test]
-        fn test_sne_skips_when_not_equal() {
-            let mut cpu = Chip8::new();
-            cpu.v[2] = 0x10;
-            let pc_before = cpu.pc;
-            cpu.execute(Instruction::Sne { x: 2, kk: 0x20 });
-            assert_eq!(cpu.pc, pc_before + 2);
-        }
-
-        #[test]
-        fn test_sne_does_not_skip_when_equal() {
-            let mut cpu = Chip8::new();
-            cpu.v[2] = 0x10;
-            let pc_before = cpu.pc;
-            cpu.execute(Instruction::Sne { x: 2, kk: 0x10 });
-            assert_eq!(cpu.pc, pc_before);
-        }
-
-        #[test]
-        fn test_se_vx_vy_skips_when_equal() {
-            let mut cpu = Chip8::new();
-            cpu.v[2] = 0x10;
-            cpu.v[3] = 0x10;
-            let pc_before = cpu.pc;
-            cpu.execute(Instruction::SeVxVy { x: 2, y: 3 });
-            assert_eq!(cpu.pc, pc_before + 2);
-        }
-
-        #[test]
-        fn test_se_vx_vy_does_not_skip_when_not_equal() {
-            let mut cpu = Chip8::new();
-            cpu.v[2] = 0x10;
-            cpu.v[3] = 0x20;
-            let pc_before = cpu.pc;
-            cpu.execute(Instruction::SeVxVy { x: 2, y: 3 });
-            assert_eq!(cpu.pc, pc_before);
-        }
-
-        #[test]
-        fn test_ld_vx_vy_copies_register() {
-            let mut cpu = Chip8::new();
-            cpu.v[3] = 0x42;
-            cpu.execute(Instruction::LdVxVy { x: 2, y: 3 });
-            assert_eq!(cpu.v[2], 0x42);
-        }
-
-        #[test]
-        fn test_or_vx_vy() {
-            let mut cpu = Chip8::new();
-            cpu.v[2] = 0b10110000;
-            cpu.v[3] = 0b11001100;
-            cpu.execute(Instruction::OrVxVy { x: 2, y: 3 });
-            assert_eq!(cpu.v[2], 0b11111100);
-        }
-
-        #[test]
-        fn test_and_vx_vy() {
-            let mut cpu = Chip8::new();
-            cpu.v[2] = 0b10110000;
-            cpu.v[3] = 0b11001100;
-            cpu.execute(Instruction::AndVxVy { x: 2, y: 3 });
-            assert_eq!(cpu.v[2], 0b10000000);
-        }
-
-        #[test]
-        fn test_xor_vx_vy() {
-            let mut cpu = Chip8::new();
-            cpu.v[2] = 0b10110000;
-            cpu.v[3] = 0b11001100;
-            cpu.execute(Instruction::XorVxVy { x: 2, y: 3 });
-            assert_eq!(cpu.v[2], 0b01111100);
-        }
-
-        #[test]
-        fn test_add_vx_vy_no_carry() {
-            let mut cpu = Chip8::new();
-            cpu.v[2] = 10;
-            cpu.v[3] = 20;
-            cpu.execute(Instruction::AddVxVy { x: 2, y: 3 });
-            assert_eq!(cpu.v[2], 30);
-            assert_eq!(cpu.v[0xF], 0); // no carry
-        }
-
-        #[test]
-        fn test_add_vx_vy_with_carry() {
-            let mut cpu = Chip8::new();
-            cpu.v[2] = 200;
-            cpu.v[3] = 100;
-            cpu.execute(Instruction::AddVxVy { x: 2, y: 3 });
-            assert_eq!(cpu.v[2], 44); // 300 - 256 = 44
-            assert_eq!(cpu.v[0xF], 1); // carry
-        }
-
-        #[test]
-        fn test_sub_vx_vy_no_borrow() {
-            let mut cpu = Chip8::new();
-            cpu.v[2] = 100;
-            cpu.v[3] = 40;
-            cpu.execute(Instruction::SubVxVy { x: 2, y: 3 });
-            assert_eq!(cpu.v[2], 60);
-            assert_eq!(cpu.v[0xF], 1); // NOT borrow = 1 because Vx > Vy
-        }
-
-        #[test]
-        fn test_sub_vx_vy_with_borrow() {
-            let mut cpu = Chip8::new();
-            cpu.v[2] = 40;
-            cpu.v[3] = 100;
-            cpu.execute(Instruction::SubVxVy { x: 2, y: 3 });
-            assert_eq!(cpu.v[0xF], 0); // NOT borrow = 0 because Vx < Vy
-        }
-
-        #[test]
-        fn test_shr_vx_shifts_right() {
-            let mut cpu = Chip8::new();
-            cpu.v[2] = 0b00001010;
-            cpu.execute(Instruction::ShrVx { x: 2 });
-            assert_eq!(cpu.v[2], 0b00000101);
-            assert_eq!(cpu.v[0xF], 0);
-        }
-
-        #[test]
-        fn test_shr_vx_saves_lost_bit() {
-            let mut cpu = Chip8::new();
-            cpu.v[2] = 0b00001011;
-            cpu.execute(Instruction::ShrVx { x: 2 });
-            assert_eq!(cpu.v[0xF], 1);
-        }
-
-        #[test]
-        fn test_subn_vx_vy_no_borrow() {
-            let mut cpu = Chip8::new();
-            cpu.v[2] = 40;
-            cpu.v[3] = 100;
-            cpu.execute(Instruction::SubnVxVy { x: 2, y: 3 });
-            assert_eq!(cpu.v[2], 60); // Vy - Vx = 100 - 40
-            assert_eq!(cpu.v[0xF], 1); // NOT borrow = 1 because Vy > Vx
-        }
-
-        #[test]
-        fn test_shl_vx_shifts_left() {
-            let mut cpu = Chip8::new();
-            cpu.v[2] = 0b00000101;
-            cpu.execute(Instruction::ShlVx { x: 2 });
-            assert_eq!(cpu.v[2], 0b00001010);
-            assert_eq!(cpu.v[0xF], 0);
-        }
-
-        #[test]
-        fn test_shl_vx_saves_lost_bit() {
-            let mut cpu = Chip8::new();
-            cpu.v[2] = 0b10000001;
-            cpu.execute(Instruction::ShlVx { x: 2 });
-            assert_eq!(cpu.v[0xF], 1);
-        }
-
-        #[test]
-        fn test_sne_vx_vy_skips_when_not_equal() {
-            let mut cpu = Chip8::new();
-            cpu.v[2] = 0x10;
-            cpu.v[3] = 0x20;
-            let pc_before = cpu.pc;
-            cpu.execute(Instruction::SneVxVy { x: 2, y: 3 });
-            assert_eq!(cpu.pc, pc_before + 2);
-        }
-
-        #[test]
-        fn test_sne_vx_vy_does_not_skip_when_equal() {
-            let mut cpu = Chip8::new();
-            cpu.v[2] = 0x10;
-            cpu.v[3] = 0x10;
-            let pc_before = cpu.pc;
-            cpu.execute(Instruction::SneVxVy { x: 2, y: 3 });
-            assert_eq!(cpu.pc, pc_before);
-        }
-
-        #[test]
-        fn test_jp_v0_jumps_to_addr_plus_v0() {
-            let mut cpu = Chip8::new();
-            cpu.v[0] = 0x10;
-            cpu.execute(Instruction::JpV0 { addr: 0x200 });
-            assert_eq!(cpu.pc, 0x210);
-        }
-
-        #[test]
-        fn test_jp_v0_with_zero_offset() {
-            let mut cpu = Chip8::new();
-            cpu.v[0] = 0;
-            cpu.execute(Instruction::JpV0 { addr: 0x300 });
-            assert_eq!(cpu.pc, 0x300);
-        }
-
-        #[test]
-        fn test_rnd_result_is_masked_by_kk() {
-            let mut cpu = Chip8::new();
-            for _ in 0..100 {
-                cpu.execute(Instruction::Rnd { x: 0, kk: 0x0F });
-                assert!(cpu.v[0] <= 0x0F);
+            #[test]
+            fn test_se_does_not_skip_when_not_equal() {
+                let mut cpu = Chip8::new();
+                cpu.v[2] = 0x10;
+                let pc_before = cpu.pc;
+                cpu.execute(Instruction::Se { x: 2, kk: 0x20 });
+                assert_eq!(cpu.pc, pc_before);
             }
         }
 
-        #[test]
-        fn test_rnd_with_zero_mask_is_always_zero() {
-            let mut cpu = Chip8::new();
-            cpu.execute(Instruction::Rnd { x: 0, kk: 0x00 });
-            assert_eq!(cpu.v[0], 0);
+        mod sne {
+            use super::*;
+
+            #[test]
+            fn test_sne_skips_when_not_equal() {
+                let mut cpu = Chip8::new();
+                cpu.v[2] = 0x10;
+                let pc_before = cpu.pc;
+                cpu.execute(Instruction::Sne { x: 2, kk: 0x20 });
+                assert_eq!(cpu.pc, pc_before + 2);
+            }
+
+            #[test]
+            fn test_sne_does_not_skip_when_equal() {
+                let mut cpu = Chip8::new();
+                cpu.v[2] = 0x10;
+                let pc_before = cpu.pc;
+                cpu.execute(Instruction::Sne { x: 2, kk: 0x10 });
+                assert_eq!(cpu.pc, pc_before);
+            }
         }
 
-        #[test]
-        fn test_drw_turns_on_pixels() {
-            let mut cpu = Chip8::new();
-            // single-row sprite: 0xF0 = 11110000
-            cpu.memory[cpu.i as usize] = 0xF0;
-            cpu.v[0] = 0; // x = 0
-            cpu.v[1] = 0; // y = 0
-            cpu.execute(Instruction::Drw { x: 0, y: 1, n: 1 });
-            // the first 4 pixels of the first row must be on
-            assert!(cpu.display[0]);
-            assert!(cpu.display[1]);
-            assert!(cpu.display[2]);
-            assert!(cpu.display[3]);
-            assert!(!cpu.display[4]);
+        mod se_vx_vy {
+            use super::*;
+
+            #[test]
+            fn test_se_vx_vy_skips_when_equal() {
+                let mut cpu = Chip8::new();
+                cpu.v[2] = 0x10;
+                cpu.v[3] = 0x10;
+                let pc_before = cpu.pc;
+                cpu.execute(Instruction::SeVxVy { x: 2, y: 3 });
+                assert_eq!(cpu.pc, pc_before + 2);
+            }
+
+            #[test]
+            fn test_se_vx_vy_does_not_skip_when_not_equal() {
+                let mut cpu = Chip8::new();
+                cpu.v[2] = 0x10;
+                cpu.v[3] = 0x20;
+                let pc_before = cpu.pc;
+                cpu.execute(Instruction::SeVxVy { x: 2, y: 3 });
+                assert_eq!(cpu.pc, pc_before);
+            }
         }
 
-        #[test]
-        fn test_drw_xor_toggles_pixels() {
-            let mut cpu = Chip8::new();
-            cpu.memory[cpu.i as usize] = 0xFF;
-            cpu.v[0] = 0;
-            cpu.v[1] = 0;
-            // draw twice — pixels should turn off again
-            cpu.execute(Instruction::Drw { x: 0, y: 1, n: 1 });
-            cpu.execute(Instruction::Drw { x: 0, y: 1, n: 1 });
-            assert!(!cpu.display[0]);
+        mod ld_vx_byte {
+            use super::*;
+
+            #[test]
+            fn test_ld_vx_byte_sets_register() {
+                let mut cpu = Chip8::new();
+                cpu.execute(Instruction::LdVxByte { x: 3, kk: 0x42 });
+                assert_eq!(cpu.v[3], 0x42);
+            }
         }
 
-        #[test]
-        fn test_drw_sets_vf_on_collision() {
-            let mut cpu = Chip8::new();
-            cpu.memory[cpu.i as usize] = 0xFF;
-            cpu.v[0] = 0;
-            cpu.v[1] = 0;
-            cpu.execute(Instruction::Drw { x: 0, y: 1, n: 1 });
-            assert_eq!(cpu.v[0xF], 0); // first pass, no collision
-            cpu.execute(Instruction::Drw { x: 0, y: 1, n: 1 });
-            assert_eq!(cpu.v[0xF], 1); // second pass, collision!
+        mod add_vx_byte {
+            use super::*;
+
+            #[test]
+            fn test_add_vx_byte_adds_value() {
+                let mut cpu = Chip8::new();
+                cpu.v[2] = 10;
+                cpu.execute(Instruction::AddVxByte { x: 2, kk: 0x05 });
+                assert_eq!(cpu.v[2], 15);
+            }
+
+            #[test]
+            fn test_add_vx_byte_wraps_on_overflow() {
+                let mut cpu = Chip8::new();
+                cpu.v[0] = 0xFF;
+                cpu.execute(Instruction::AddVxByte { x: 0, kk: 0x01 });
+                assert_eq!(cpu.v[0], 0x00);
+            }
         }
 
-        #[test]
-        fn test_drw_wraps_horizontally() {
-            let mut cpu = Chip8::new();
-            cpu.memory[cpu.i as usize] = 0xFF;
-            cpu.v[0] = 63; // x near the right edge
-            cpu.v[1] = 0;
-            cpu.execute(Instruction::Drw { x: 0, y: 1, n: 1 });
-            // pixel at x=63 must be on
-            assert!(cpu.display[63]);
-            // the wrapped pixel at x=0 must be on
-            assert!(cpu.display[0]);
+        mod ld_vx_vy {
+            use super::*;
+
+            #[test]
+            fn test_ld_vx_vy_copies_register() {
+                let mut cpu = Chip8::new();
+                cpu.v[3] = 0x42;
+                cpu.execute(Instruction::LdVxVy { x: 2, y: 3 });
+                assert_eq!(cpu.v[2], 0x42);
+            }
         }
 
-        #[test]
-        fn test_drw_no_collision_resets_vf() {
-            let mut cpu = Chip8::new();
-            cpu.v[0xF] = 1; // set VF to 1 manually
-            cpu.memory[cpu.i as usize] = 0xFF;
-            cpu.v[0] = 0;
-            cpu.v[1] = 0;
-            cpu.execute(Instruction::Drw { x: 0, y: 1, n: 1 });
-            assert_eq!(cpu.v[0xF], 0); // VF must be reset to 0
+        mod or_vx_vy {
+            use super::*;
+
+            #[test]
+            fn test_or_vx_vy() {
+                let mut cpu = Chip8::new();
+                cpu.v[2] = 0b10110000;
+                cpu.v[3] = 0b11001100;
+                cpu.execute(Instruction::OrVxVy { x: 2, y: 3 });
+                assert_eq!(cpu.v[2], 0b11111100);
+            }
         }
 
-        #[test]
-        fn test_skp_skips_when_key_pressed() {
-            let mut cpu = Chip8::new();
-            cpu.v[2] = 0x5;
-            cpu.keys[0x5] = true;
-            let pc_before = cpu.pc;
-            cpu.execute(Instruction::Skp { x: 2 });
-            assert_eq!(cpu.pc, pc_before + 2);
+        mod and_vx_vy {
+            use super::*;
+
+            #[test]
+            fn test_and_vx_vy() {
+                let mut cpu = Chip8::new();
+                cpu.v[2] = 0b10110000;
+                cpu.v[3] = 0b11001100;
+                cpu.execute(Instruction::AndVxVy { x: 2, y: 3 });
+                assert_eq!(cpu.v[2], 0b10000000);
+            }
         }
 
-        #[test]
-        fn test_skp_does_not_skip_when_key_not_pressed() {
-            let mut cpu = Chip8::new();
-            cpu.v[2] = 0x5;
-            cpu.keys[0x5] = false;
-            let pc_before = cpu.pc;
-            cpu.execute(Instruction::Skp { x: 2 });
-            assert_eq!(cpu.pc, pc_before);
+        mod xor_vx_vy {
+            use super::*;
+
+            #[test]
+            fn test_xor_vx_vy() {
+                let mut cpu = Chip8::new();
+                cpu.v[2] = 0b10110000;
+                cpu.v[3] = 0b11001100;
+                cpu.execute(Instruction::XorVxVy { x: 2, y: 3 });
+                assert_eq!(cpu.v[2], 0b01111100);
+            }
         }
 
-        #[test]
-        fn test_sknp_skips_when_key_not_pressed() {
-            let mut cpu = Chip8::new();
-            cpu.v[2] = 0x5;
-            cpu.keys[0x5] = false;
-            let pc_before = cpu.pc;
-            cpu.execute(Instruction::Sknp { x: 2 });
-            assert_eq!(cpu.pc, pc_before + 2);
+        mod add_vx_vy {
+            use super::*;
+
+            #[test]
+            fn test_add_vx_vy_no_carry() {
+                let mut cpu = Chip8::new();
+                cpu.v[2] = 10;
+                cpu.v[3] = 20;
+                cpu.execute(Instruction::AddVxVy { x: 2, y: 3 });
+                assert_eq!(cpu.v[2], 30);
+                assert_eq!(cpu.v[0xF], 0);
+            }
+
+            #[test]
+            fn test_add_vx_vy_with_carry() {
+                let mut cpu = Chip8::new();
+                cpu.v[2] = 200;
+                cpu.v[3] = 100;
+                cpu.execute(Instruction::AddVxVy { x: 2, y: 3 });
+                assert_eq!(cpu.v[2], 44); // 300 - 256 = 44
+                assert_eq!(cpu.v[0xF], 1);
+            }
         }
 
-        #[test]
-        fn test_sknp_does_not_skip_when_key_pressed() {
-            let mut cpu = Chip8::new();
-            cpu.v[2] = 0x5;
-            cpu.keys[0x5] = true;
-            let pc_before = cpu.pc;
-            cpu.execute(Instruction::Sknp { x: 2 });
-            assert_eq!(cpu.pc, pc_before);
+        mod sub_vx_vy {
+            use super::*;
+
+            #[test]
+            fn test_sub_vx_vy_no_borrow() {
+                let mut cpu = Chip8::new();
+                cpu.v[2] = 100;
+                cpu.v[3] = 40;
+                cpu.execute(Instruction::SubVxVy { x: 2, y: 3 });
+                assert_eq!(cpu.v[2], 60);
+                assert_eq!(cpu.v[0xF], 1); // NOT borrow = 1 because Vx > Vy
+            }
+
+            #[test]
+            fn test_sub_vx_vy_with_borrow() {
+                let mut cpu = Chip8::new();
+                cpu.v[2] = 40;
+                cpu.v[3] = 100;
+                cpu.execute(Instruction::SubVxVy { x: 2, y: 3 });
+                assert_eq!(cpu.v[0xF], 0); // NOT borrow = 0 because Vx < Vy
+            }
+        }
+
+        mod shr_vx {
+            use super::*;
+
+            #[test]
+            fn test_shr_vx_shifts_right() {
+                let mut cpu = Chip8::new();
+                cpu.v[2] = 0b00001010;
+                cpu.execute(Instruction::ShrVx { x: 2 });
+                assert_eq!(cpu.v[2], 0b00000101);
+                assert_eq!(cpu.v[0xF], 0);
+            }
+
+            #[test]
+            fn test_shr_vx_saves_lost_bit() {
+                let mut cpu = Chip8::new();
+                cpu.v[2] = 0b00001011;
+                cpu.execute(Instruction::ShrVx { x: 2 });
+                assert_eq!(cpu.v[0xF], 1);
+            }
+        }
+
+        mod subn_vx_vy {
+            use super::*;
+
+            #[test]
+            fn test_subn_vx_vy_no_borrow() {
+                let mut cpu = Chip8::new();
+                cpu.v[2] = 40;
+                cpu.v[3] = 100;
+                cpu.execute(Instruction::SubnVxVy { x: 2, y: 3 });
+                assert_eq!(cpu.v[2], 60); // Vy - Vx = 100 - 40
+                assert_eq!(cpu.v[0xF], 1); // NOT borrow = 1 because Vy > Vx
+            }
+        }
+
+        mod shl_vx {
+            use super::*;
+
+            #[test]
+            fn test_shl_vx_shifts_left() {
+                let mut cpu = Chip8::new();
+                cpu.v[2] = 0b00000101;
+                cpu.execute(Instruction::ShlVx { x: 2 });
+                assert_eq!(cpu.v[2], 0b00001010);
+                assert_eq!(cpu.v[0xF], 0);
+            }
+
+            #[test]
+            fn test_shl_vx_saves_lost_bit() {
+                let mut cpu = Chip8::new();
+                cpu.v[2] = 0b10000001;
+                cpu.execute(Instruction::ShlVx { x: 2 });
+                assert_eq!(cpu.v[0xF], 1);
+            }
+        }
+
+        mod sne_vx_vy {
+            use super::*;
+
+            #[test]
+            fn test_sne_vx_vy_skips_when_not_equal() {
+                let mut cpu = Chip8::new();
+                cpu.v[2] = 0x10;
+                cpu.v[3] = 0x20;
+                let pc_before = cpu.pc;
+                cpu.execute(Instruction::SneVxVy { x: 2, y: 3 });
+                assert_eq!(cpu.pc, pc_before + 2);
+            }
+
+            #[test]
+            fn test_sne_vx_vy_does_not_skip_when_equal() {
+                let mut cpu = Chip8::new();
+                cpu.v[2] = 0x10;
+                cpu.v[3] = 0x10;
+                let pc_before = cpu.pc;
+                cpu.execute(Instruction::SneVxVy { x: 2, y: 3 });
+                assert_eq!(cpu.pc, pc_before);
+            }
+        }
+
+        mod ld_i {
+            use super::*;
+
+            #[test]
+            fn test_ld_i_sets_i() {
+                let mut cpu = Chip8::new();
+                cpu.execute(Instruction::LdI { addr: 0x123 });
+                assert_eq!(cpu.i, 0x123);
+            }
+        }
+
+        mod jp_v0 {
+            use super::*;
+
+            #[test]
+            fn test_jp_v0_jumps_to_addr_plus_v0() {
+                let mut cpu = Chip8::new();
+                cpu.v[0] = 0x10;
+                cpu.execute(Instruction::JpV0 { addr: 0x200 });
+                assert_eq!(cpu.pc, 0x210);
+            }
+
+            #[test]
+            fn test_jp_v0_with_zero_offset() {
+                let mut cpu = Chip8::new();
+                cpu.v[0] = 0;
+                cpu.execute(Instruction::JpV0 { addr: 0x300 });
+                assert_eq!(cpu.pc, 0x300);
+            }
+        }
+
+        mod rnd {
+            use super::*;
+
+            #[test]
+            fn test_rnd_result_is_masked_by_kk() {
+                let mut cpu = Chip8::new();
+                for _ in 0..100 {
+                    cpu.execute(Instruction::Rnd { x: 0, kk: 0x0F });
+                    assert!(cpu.v[0] <= 0x0F);
+                }
+            }
+
+            #[test]
+            fn test_rnd_with_zero_mask_is_always_zero() {
+                let mut cpu = Chip8::new();
+                cpu.execute(Instruction::Rnd { x: 0, kk: 0x00 });
+                assert_eq!(cpu.v[0], 0);
+            }
+        }
+
+        mod drw {
+            use super::*;
+
+            #[test]
+            fn test_drw_turns_on_pixels() {
+                let mut cpu = Chip8::new();
+                // single-row sprite: 0xF0 = 11110000
+                cpu.memory[cpu.i as usize] = 0xF0;
+                cpu.v[0] = 0; // x = 0
+                cpu.v[1] = 0; // y = 0
+                cpu.execute(Instruction::Drw { x: 0, y: 1, n: 1 });
+                assert!(cpu.display[0]);
+                assert!(cpu.display[1]);
+                assert!(cpu.display[2]);
+                assert!(cpu.display[3]);
+                assert!(!cpu.display[4]);
+            }
+
+            #[test]
+            fn test_drw_xor_toggles_pixels() {
+                let mut cpu = Chip8::new();
+                cpu.memory[cpu.i as usize] = 0xFF;
+                cpu.v[0] = 0;
+                cpu.v[1] = 0;
+                cpu.execute(Instruction::Drw { x: 0, y: 1, n: 1 });
+                cpu.execute(Instruction::Drw { x: 0, y: 1, n: 1 });
+                assert!(!cpu.display[0]);
+            }
+
+            #[test]
+            fn test_drw_sets_vf_on_collision() {
+                let mut cpu = Chip8::new();
+                cpu.memory[cpu.i as usize] = 0xFF;
+                cpu.v[0] = 0;
+                cpu.v[1] = 0;
+                cpu.execute(Instruction::Drw { x: 0, y: 1, n: 1 });
+                assert_eq!(cpu.v[0xF], 0); // first pass, no collision
+                cpu.execute(Instruction::Drw { x: 0, y: 1, n: 1 });
+                assert_eq!(cpu.v[0xF], 1); // second pass, collision!
+            }
+
+            #[test]
+            fn test_drw_wraps_horizontally() {
+                let mut cpu = Chip8::new();
+                cpu.memory[cpu.i as usize] = 0xFF;
+                cpu.v[0] = 63; // x near the right edge
+                cpu.v[1] = 0;
+                cpu.execute(Instruction::Drw { x: 0, y: 1, n: 1 });
+                assert!(cpu.display[63]);
+                assert!(cpu.display[0]); // wrapped pixel
+            }
+
+            #[test]
+            fn test_drw_no_collision_resets_vf() {
+                let mut cpu = Chip8::new();
+                cpu.v[0xF] = 1;
+                cpu.memory[cpu.i as usize] = 0xFF;
+                cpu.v[0] = 0;
+                cpu.v[1] = 0;
+                cpu.execute(Instruction::Drw { x: 0, y: 1, n: 1 });
+                assert_eq!(cpu.v[0xF], 0);
+            }
+        }
+
+        mod skp {
+            use super::*;
+
+            #[test]
+            fn test_skp_skips_when_key_pressed() {
+                let mut cpu = Chip8::new();
+                cpu.v[2] = 0x5;
+                cpu.keys[0x5] = true;
+                let pc_before = cpu.pc;
+                cpu.execute(Instruction::Skp { x: 2 });
+                assert_eq!(cpu.pc, pc_before + 2);
+            }
+
+            #[test]
+            fn test_skp_does_not_skip_when_key_not_pressed() {
+                let mut cpu = Chip8::new();
+                cpu.v[2] = 0x5;
+                cpu.keys[0x5] = false;
+                let pc_before = cpu.pc;
+                cpu.execute(Instruction::Skp { x: 2 });
+                assert_eq!(cpu.pc, pc_before);
+            }
+        }
+
+        mod sknp {
+            use super::*;
+
+            #[test]
+            fn test_sknp_skips_when_key_not_pressed() {
+                let mut cpu = Chip8::new();
+                cpu.v[2] = 0x5;
+                cpu.keys[0x5] = false;
+                let pc_before = cpu.pc;
+                cpu.execute(Instruction::Sknp { x: 2 });
+                assert_eq!(cpu.pc, pc_before + 2);
+            }
+
+            #[test]
+            fn test_sknp_does_not_skip_when_key_pressed() {
+                let mut cpu = Chip8::new();
+                cpu.v[2] = 0x5;
+                cpu.keys[0x5] = true;
+                let pc_before = cpu.pc;
+                cpu.execute(Instruction::Sknp { x: 2 });
+                assert_eq!(cpu.pc, pc_before);
+            }
         }
 
         mod ld_vx_dt {
@@ -1310,6 +1395,26 @@ mod tests {
                 cpu.delay_timer = 42;
                 cpu.execute(Instruction::LdVxDt { x: 3 });
                 assert_eq!(cpu.v[3], 42);
+            }
+        }
+
+        mod ld_vx_k {
+            use super::*;
+
+            #[test]
+            fn test_ld_vx_k_stores_key_when_pressed() {
+                let mut cpu = Chip8::new();
+                cpu.keys[0x5] = true;
+                cpu.execute(Instruction::LdVxK { x: 2 });
+                assert_eq!(cpu.v[2], 0x5);
+            }
+
+            #[test]
+            fn test_ld_vx_k_rewinds_pc_when_no_key() {
+                let mut cpu = Chip8::new();
+                let pc_before = cpu.pc;
+                cpu.execute(Instruction::LdVxK { x: 2 });
+                assert_eq!(cpu.pc, pc_before - 2);
             }
         }
 
@@ -1358,7 +1463,7 @@ mod tests {
                 let mut cpu = Chip8::new();
                 cpu.v[0] = 0x0;
                 cpu.execute(Instruction::LdFVx { x: 0 });
-                assert_eq!(cpu.i, 0x000); // font "0" starts at 0x000
+                assert_eq!(cpu.i, 0x000);
             }
 
             #[test]
@@ -1366,7 +1471,7 @@ mod tests {
                 let mut cpu = Chip8::new();
                 cpu.v[0] = 0x1;
                 cpu.execute(Instruction::LdFVx { x: 0 });
-                assert_eq!(cpu.i, 0x005); // font "1" starts at 0x005
+                assert_eq!(cpu.i, 0x005);
             }
 
             #[test]
@@ -1374,27 +1479,7 @@ mod tests {
                 let mut cpu = Chip8::new();
                 cpu.v[0] = 0xF;
                 cpu.execute(Instruction::LdFVx { x: 0 });
-                assert_eq!(cpu.i, 0x04B); // font "F" starts at 0x04B (75)
-            }
-        }
-
-        mod ld_vx_k {
-            use super::*;
-
-            #[test]
-            fn test_ld_vx_k_stores_key_when_pressed() {
-                let mut cpu = Chip8::new();
-                cpu.keys[0x5] = true;
-                cpu.execute(Instruction::LdVxK { x: 2 });
-                assert_eq!(cpu.v[2], 0x5);
-            }
-
-            #[test]
-            fn test_ld_vx_k_rewinds_pc_when_no_key() {
-                let mut cpu = Chip8::new();
-                let pc_before = cpu.pc;
-                cpu.execute(Instruction::LdVxK { x: 2 });
-                assert_eq!(cpu.pc, pc_before - 2);
+                assert_eq!(cpu.i, 0x04B);
             }
         }
 
@@ -1463,15 +1548,23 @@ mod tests {
                 cpu.i = 0x300;
                 cpu.v[0] = 0xAA;
                 cpu.v[1] = 0xBB;
-                // save
                 cpu.execute(Instruction::LdIVx { x: 1 });
-                // clear the registers
                 cpu.v[0] = 0;
                 cpu.v[1] = 0;
-                // reload
                 cpu.execute(Instruction::LdVxI { x: 1 });
                 assert_eq!(cpu.v[0], 0xAA);
                 assert_eq!(cpu.v[1], 0xBB);
+            }
+        }
+
+        mod unknown {
+            use super::*;
+
+            #[test]
+            #[should_panic(expected = "Unknown opcode: 0xFFFF")]
+            fn test_unknown_opcode_panics() {
+                let mut cpu = Chip8::new();
+                cpu.execute(Instruction::Unknown(0xFFFF));
             }
         }
     }
