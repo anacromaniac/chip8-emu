@@ -100,17 +100,17 @@ pub enum Instruction {
     /// Set Vx = Vx - Vy, VF = NOT borrow (1 if Vx > Vy, 0 otherwise)
     SubVxVy { x: usize, y: usize },
 
-    /// 8XY6 - SHR Vx
-    /// Set Vx = Vx >> 1, VF = least significant bit before shift
-    ShrVx { x: usize },
+    /// 8XY6 - SHR Vx, Vy
+    /// Set Vx = Vy >> 1, VF = least significant bit of Vy before shift
+    ShrVx { x: usize, y: usize },
 
     /// 8XY7 - SUBN Vx, Vy
     /// Set Vx = Vy - Vx, VF = NOT borrow (1 if Vy > Vx, 0 otherwise)
     SubnVxVy { x: usize, y: usize },
 
-    /// 8XYE - SHL Vx
-    /// Set Vx = Vx << 1, VF = most significant bit before shift
-    ShlVx { x: usize },
+    /// 8XYE - SHL Vx, Vy
+    /// Set Vx = Vy << 1, VF = most significant bit of Vy before shift
+    ShlVx { x: usize, y: usize },
 
     /// 9XY0 - SNE Vx, Vy
     /// Skip next instruction if Vx != Vy
@@ -285,9 +285,9 @@ impl Chip8 {
             (0x8, _, _, 0x3) => Instruction::XorVxVy { x, y },
             (0x8, _, _, 0x4) => Instruction::AddVxVy { x, y },
             (0x8, _, _, 0x5) => Instruction::SubVxVy { x, y },
-            (0x8, _, _, 0x6) => Instruction::ShrVx { x },
+            (0x8, _, _, 0x6) => Instruction::ShrVx { x, y },
             (0x8, _, _, 0x7) => Instruction::SubnVxVy { x, y },
-            (0x8, _, _, 0xE) => Instruction::ShlVx { x },
+            (0x8, _, _, 0xE) => Instruction::ShlVx { x, y },
             (0x9, _, _, 0x0) => Instruction::SneVxVy { x, y },
             (0xA, _, _, _) => Instruction::LdI { addr: nnn },
             (0xB, _, _, _) => Instruction::JpV0 { addr: nnn },
@@ -392,9 +392,10 @@ impl Chip8 {
                 self.v[0xF] = !borrow as u8; // NOT borrow
             }
 
-            Instruction::ShrVx { x } => {
-                self.v[0xF] = self.v[x] & 0x1;
-                self.v[x] >>= 1;
+            Instruction::ShrVx { x, y } => {
+                let lsb = self.v[y] & 0x1;
+                self.v[x] = self.v[y] >> 1;
+                self.v[0xF] = lsb;
             }
 
             Instruction::SubnVxVy { x, y } => {
@@ -403,9 +404,10 @@ impl Chip8 {
                 self.v[0xF] = !borrow as u8; // NOT borrow
             }
 
-            Instruction::ShlVx { x } => {
-                self.v[0xF] = (self.v[x] >> 7) & 0x1;
-                self.v[x] <<= 1;
+            Instruction::ShlVx { x, y } => {
+                let msb = (self.v[y] >> 7) & 0x1;
+                self.v[x] = self.v[y] << 1;
+                self.v[0xF] = msb;
             }
 
             Instruction::SneVxVy { x, y } => {
@@ -419,7 +421,7 @@ impl Chip8 {
             }
 
             Instruction::Rnd { x, kk } => {
-                let random: u8 = rand::random::<u8>();
+                let random: u8 = rand::random();
                 self.v[x] = random & kk;
             }
 
@@ -510,12 +512,14 @@ impl Chip8 {
                 for reg in 0..=x {
                     self.memory[self.i as usize + reg] = self.v[reg];
                 }
+                self.i += (x + 1) as u16;
             }
 
             Instruction::LdVxI { x } => {
                 for reg in 0..=x {
                     self.v[reg] = self.memory[self.i as usize + reg];
                 }
+                self.i += (x + 1) as u16;
             }
 
             Instruction::Unknown(opcode) => {
@@ -727,7 +731,7 @@ mod tests {
         #[test]
         fn test_decode_shr_vx() {
             let cpu = Chip8::new();
-            assert_eq!(cpu.decode(0x8236), Instruction::ShrVx { x: 2 });
+            assert_eq!(cpu.decode(0x8236), Instruction::ShrVx { x: 2, y: 3 });
         }
 
         #[test]
@@ -739,7 +743,7 @@ mod tests {
         #[test]
         fn test_decode_shl_vx() {
             let cpu = Chip8::new();
-            assert_eq!(cpu.decode(0x823E), Instruction::ShlVx { x: 2 });
+            assert_eq!(cpu.decode(0x823E), Instruction::ShlVx { x: 2, y: 3 });
         }
 
         #[test]
@@ -1142,6 +1146,7 @@ mod tests {
                 cpu.v[2] = 40;
                 cpu.v[3] = 100;
                 cpu.execute(Instruction::SubVxVy { x: 2, y: 3 });
+                assert_eq!(cpu.v[2], 40u8.wrapping_sub(100)); // wraps around
                 assert_eq!(cpu.v[0xF], 0); // NOT borrow = 0 because Vx < Vy
             }
         }
@@ -1150,20 +1155,30 @@ mod tests {
             use super::*;
 
             #[test]
-            fn test_shr_vx_shifts_right() {
+            fn test_shr_vx_shifts_vy_into_vx() {
                 let mut cpu = Chip8::new();
-                cpu.v[2] = 0b00001010;
-                cpu.execute(Instruction::ShrVx { x: 2 });
+                cpu.v[3] = 0b00001010;
+                cpu.execute(Instruction::ShrVx { x: 2, y: 3 });
                 assert_eq!(cpu.v[2], 0b00000101);
+                assert_eq!(cpu.v[3], 0b00001010); // Vy unchanged
                 assert_eq!(cpu.v[0xF], 0);
             }
 
             #[test]
             fn test_shr_vx_saves_lost_bit() {
                 let mut cpu = Chip8::new();
-                cpu.v[2] = 0b00001011;
-                cpu.execute(Instruction::ShrVx { x: 2 });
+                cpu.v[3] = 0b00001011;
+                cpu.execute(Instruction::ShrVx { x: 2, y: 3 });
                 assert_eq!(cpu.v[0xF], 1);
+            }
+
+            #[test]
+            fn test_shr_vx_vf_is_set_after_result() {
+                let mut cpu = Chip8::new();
+                // x == 0xF: result written to VF, then VF overwritten with flag
+                cpu.v[0xF] = 0b00000011;
+                cpu.execute(Instruction::ShrVx { x: 0xF, y: 0xF });
+                assert_eq!(cpu.v[0xF], 1); // flag (LSB), not shifted result
             }
         }
 
@@ -1179,26 +1194,46 @@ mod tests {
                 assert_eq!(cpu.v[2], 60); // Vy - Vx = 100 - 40
                 assert_eq!(cpu.v[0xF], 1); // NOT borrow = 1 because Vy > Vx
             }
+
+            #[test]
+            fn test_subn_vx_vy_with_borrow() {
+                let mut cpu = Chip8::new();
+                cpu.v[2] = 100;
+                cpu.v[3] = 40;
+                cpu.execute(Instruction::SubnVxVy { x: 2, y: 3 });
+                assert_eq!(cpu.v[2], 40u8.wrapping_sub(100)); // wraps around
+                assert_eq!(cpu.v[0xF], 0); // NOT borrow = 0 because Vy < Vx
+            }
         }
 
         mod shl_vx {
             use super::*;
 
             #[test]
-            fn test_shl_vx_shifts_left() {
+            fn test_shl_vx_shifts_vy_into_vx() {
                 let mut cpu = Chip8::new();
-                cpu.v[2] = 0b00000101;
-                cpu.execute(Instruction::ShlVx { x: 2 });
+                cpu.v[3] = 0b00000101;
+                cpu.execute(Instruction::ShlVx { x: 2, y: 3 });
                 assert_eq!(cpu.v[2], 0b00001010);
+                assert_eq!(cpu.v[3], 0b00000101); // Vy unchanged
                 assert_eq!(cpu.v[0xF], 0);
             }
 
             #[test]
             fn test_shl_vx_saves_lost_bit() {
                 let mut cpu = Chip8::new();
-                cpu.v[2] = 0b10000001;
-                cpu.execute(Instruction::ShlVx { x: 2 });
+                cpu.v[3] = 0b10000001;
+                cpu.execute(Instruction::ShlVx { x: 2, y: 3 });
                 assert_eq!(cpu.v[0xF], 1);
+            }
+
+            #[test]
+            fn test_shl_vx_vf_is_set_after_result() {
+                let mut cpu = Chip8::new();
+                // x == 0xF: result written to VF, then VF overwritten with flag
+                cpu.v[0xF] = 0b11000000;
+                cpu.execute(Instruction::ShlVx { x: 0xF, y: 0xF });
+                assert_eq!(cpu.v[0xF], 1); // flag (MSB), not shifted result
             }
         }
 
@@ -1327,6 +1362,20 @@ mod tests {
                 cpu.execute(Instruction::Drw { x: 0, y: 1, n: 1 });
                 assert!(cpu.display[63]);
                 assert!(cpu.display[0]); // wrapped pixel
+            }
+
+            #[test]
+            fn test_drw_wraps_vertically() {
+                let mut cpu = Chip8::new();
+                cpu.memory[cpu.i as usize] = 0xFF;
+                cpu.memory[cpu.i as usize + 1] = 0xFF;
+                cpu.v[0] = 0;
+                cpu.v[1] = 31; // y near the bottom edge
+                cpu.execute(Instruction::Drw { x: 0, y: 1, n: 2 });
+                // row at y=31 must be on
+                assert!(cpu.display[31 * 64]);
+                // the wrapped row at y=0 must be on
+                assert!(cpu.display[0]);
             }
 
             #[test]
@@ -1526,6 +1575,7 @@ mod tests {
                 assert_eq!(cpu.memory[0x300], 0x11);
                 assert_eq!(cpu.memory[0x301], 0x22);
                 assert_eq!(cpu.memory[0x302], 0x33);
+                assert_eq!(cpu.i, 0x303); // I incremented by x + 1
             }
         }
 
@@ -1543,6 +1593,7 @@ mod tests {
                 assert_eq!(cpu.v[0], 0x11);
                 assert_eq!(cpu.v[1], 0x22);
                 assert_eq!(cpu.v[2], 0x33);
+                assert_eq!(cpu.i, 0x303); // I incremented by x + 1
             }
 
             #[test]
@@ -1551,9 +1602,14 @@ mod tests {
                 cpu.i = 0x300;
                 cpu.v[0] = 0xAA;
                 cpu.v[1] = 0xBB;
+                // save — I advances to 0x302
                 cpu.execute(Instruction::LdIVx { x: 1 });
+                // clear the registers
                 cpu.v[0] = 0;
                 cpu.v[1] = 0;
+                // reset I so the reload reads from the same address
+                cpu.i = 0x300;
+                // reload — I advances to 0x302 again
                 cpu.execute(Instruction::LdVxI { x: 1 });
                 assert_eq!(cpu.v[0], 0xAA);
                 assert_eq!(cpu.v[1], 0xBB);
