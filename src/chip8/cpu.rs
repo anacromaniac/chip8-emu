@@ -178,6 +178,7 @@ pub enum Instruction {
     Unknown(u16),
 }
 
+#[derive(Debug, PartialEq)]
 /// Configures behavioral quirks of the CHIP-8 CPU.
 ///
 /// Each flag controls one behavioral difference between the original 1977
@@ -442,23 +443,17 @@ impl Chip8 {
 
             Instruction::OrVxVy { x, y } => {
                 self.v[x] |= self.v[y];
-                if self.config.reset_vf_after_logical {
-                    self.v[0xF] = 0;
-                }
+                self.reset_vf_if_logical_quirk();
             }
 
             Instruction::AndVxVy { x, y } => {
                 self.v[x] &= self.v[y];
-                if self.config.reset_vf_after_logical {
-                    self.v[0xF] = 0;
-                }
+                self.reset_vf_if_logical_quirk();
             }
 
             Instruction::XorVxVy { x, y } => {
                 self.v[x] ^= self.v[y];
-                if self.config.reset_vf_after_logical {
-                    self.v[0xF] = 0;
-                }
+                self.reset_vf_if_logical_quirk();
             }
 
             Instruction::AddVxVy { x, y } => {
@@ -625,6 +620,12 @@ impl Chip8 {
             Instruction::Unknown(opcode) => {
                 panic!("Unknown opcode: {:#06X}", opcode);
             }
+        }
+    }
+
+    fn reset_vf_if_logical_quirk(&mut self) {
+        if self.config.reset_vf_after_logical {
+            self.v[0xF] = 0;
         }
     }
 }
@@ -1841,10 +1842,11 @@ mod tests {
             #[test]
             fn test_jp_v0_modern_uses_vx_as_offset() {
                 let mut cpu = new_chip8(); // default = modern
-                // addr = 0x200, upper nibble x = 2
+                // addr = 0x200, upper nibble x = 2; V[0] differs to prove it's ignored
+                cpu.v[0] = 0xFF;
                 cpu.v[2] = 0x30;
                 cpu.execute(Instruction::JpV0 { addr: 0x200 });
-                assert_eq!(cpu.pc, 0x200 + 0x30); // addr + V[2]
+                assert_eq!(cpu.pc, 0x200 + 0x30); // addr + V[2], not V[0]
             }
 
             #[test]
@@ -1881,6 +1883,30 @@ mod tests {
                 cpu.execute(Instruction::Drw { x: 0, y: 1, n: 1 });
                 assert!(cpu.display[62]); // pixel drawn
                 assert!(cpu.display[63]); // pixel drawn
+                assert!(!cpu.display[0]); // NOT drawn (clipped)
+            }
+
+            #[test]
+            fn test_drw_modern_wraps_past_bottom_edge() {
+                let mut cpu = new_chip8(); // default = modern (wrap)
+                cpu.memory[cpu.i as usize] = 0xFF;
+                cpu.memory[cpu.i as usize + 1] = 0xFF;
+                cpu.v[0] = 0;
+                cpu.v[1] = 31; // y=31, second row wraps to y=0
+                cpu.execute(Instruction::Drw { x: 0, y: 1, n: 2 });
+                assert!(cpu.display[31 * DISPLAY_WIDTH]); // row at y=31 drawn
+                assert!(cpu.display[0]); // wrapped row at y=0 drawn
+            }
+
+            #[test]
+            fn test_drw_legacy_clips_past_bottom_edge() {
+                let mut cpu = Chip8::new(Chip8Config::legacy());
+                cpu.memory[cpu.i as usize] = 0xFF;
+                cpu.memory[cpu.i as usize + 1] = 0xFF;
+                cpu.v[0] = 0;
+                cpu.v[1] = 31; // y=31, second row is out of bounds
+                cpu.execute(Instruction::Drw { x: 0, y: 1, n: 2 });
+                assert!(cpu.display[31 * DISPLAY_WIDTH]); // row at y=31 drawn
                 assert!(!cpu.display[0]); // NOT drawn (clipped)
             }
         }
