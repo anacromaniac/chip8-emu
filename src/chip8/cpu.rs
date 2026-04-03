@@ -178,7 +178,6 @@ pub enum Instruction {
     Unknown(u16),
 }
 
-#[derive(Debug, PartialEq)]
 /// Configures behavioral quirks of the CHIP-8 CPU.
 ///
 /// Each flag controls one behavioral difference between the original 1977
@@ -186,6 +185,7 @@ pub enum Instruction {
 ///
 /// Use [`Chip8Config::default()`] for modern behavior or
 /// [`Chip8Config::legacy()`] for original 1977 behavior.
+#[derive(Debug, PartialEq)]
 pub struct Chip8Config {
     /// Shift source register for 8XY6 (SHR) and 8XYE (SHL).
     ///
