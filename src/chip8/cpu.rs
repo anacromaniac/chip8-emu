@@ -623,6 +623,19 @@ impl Chip8 {
         }
     }
 
+    pub fn tick_timers(&mut self) {
+        if self.delay_timer > 0 {
+            self.delay_timer -= 1;
+        }
+        if self.sound_timer > 0 {
+            self.sound_timer -= 1;
+        }
+    }
+
+    pub fn is_beeping(&self) -> bool {
+        self.sound_timer > 0
+    }
+
     fn reset_vf_if_logical_quirk(&mut self) {
         if self.config.reset_vf_after_logical {
             self.v[0xF] = 0;
@@ -1979,6 +1992,51 @@ mod tests {
                 assert_eq!(cpu.v[0], 0xF0);
                 assert_eq!(cpu.v[0xF], 0);
             }
+        }
+    }
+
+    mod tick_timers {
+        use super::*;
+
+        #[test]
+        fn test_tick_decrements_delay_timer() {
+            let mut cpu = new_chip8();
+            cpu.delay_timer = 10;
+            cpu.tick_timers();
+            assert_eq!(cpu.delay_timer, 9);
+        }
+
+        #[test]
+        fn test_tick_decrements_sound_timer() {
+            let mut cpu = new_chip8();
+            cpu.sound_timer = 5;
+            cpu.tick_timers();
+            assert_eq!(cpu.sound_timer, 4);
+        }
+
+        #[test]
+        fn test_tick_does_not_underflow_delay_timer() {
+            let mut cpu = new_chip8();
+            cpu.delay_timer = 0;
+            cpu.tick_timers();
+            assert_eq!(cpu.delay_timer, 0);
+        }
+
+        #[test]
+        fn test_tick_does_not_underflow_sound_timer() {
+            let mut cpu = new_chip8();
+            cpu.sound_timer = 0;
+            cpu.tick_timers();
+            assert_eq!(cpu.sound_timer, 0);
+        }
+
+        #[test]
+        fn test_is_beeping_when_sound_timer_nonzero() {
+            let mut cpu = new_chip8();
+            cpu.sound_timer = 1;
+            assert!(cpu.is_beeping());
+            cpu.tick_timers();
+            assert!(!cpu.is_beeping());
         }
     }
 }
