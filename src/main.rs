@@ -1,4 +1,5 @@
-use chip8_emu::chip8::{Chip8, Chip8Config};
+mod chip8;
+use chip8::{Chip8, Chip8Config};
 
 fn main() {
     println!("CHIP-8 emulator starting...");
