@@ -23,10 +23,10 @@ pub struct Chip8Config {
 
     /// Offset register used by the BNNN / BXNN jump instruction.
     ///
-    /// - `false` (legacy): PC = NNN + **V0**.
-    /// - `true` (modern/default): PC = XNN + **VX** (X is nibble 2 of the
+    /// - `true` (legacy): PC = NNN + **V0**.
+    /// - `false` (modern/default): PC = XNN + **VX** (X is nibble 2 of the
     ///   opcode).
-    pub jump_v0_uses_vx: bool,
+    pub jump_uses_v0: bool,
 
     /// Sprite drawing behavior when pixels reach the screen edge (DXYN).
     ///
@@ -48,7 +48,7 @@ impl Default for Chip8Config {
         Self {
             shift_uses_vy: false,
             load_store_increments_i: false,
-            jump_v0_uses_vx: true,
+            jump_uses_v0: false,
             clip_sprites: false,
             reset_vf_after_logical: false,
         }
@@ -61,7 +61,7 @@ impl Chip8Config {
         Self {
             shift_uses_vy: true,
             load_store_increments_i: true,
-            jump_v0_uses_vx: false,
+            jump_uses_v0: true,
             clip_sprites: true,
             reset_vf_after_logical: true,
         }

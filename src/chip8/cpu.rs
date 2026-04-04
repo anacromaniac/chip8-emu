@@ -249,10 +249,10 @@ impl Chip8 {
             }
 
             Instruction::JpV0 { addr } => {
-                let offset_reg = if self.config.jump_v0_uses_vx {
-                    (addr >> 8) as usize
-                } else {
+                let offset_reg = if self.config.jump_uses_v0 {
                     0
+                } else {
+                    (addr >> 8) as usize
                 };
                 self.pc = addr + self.v[offset_reg] as u16;
             }
