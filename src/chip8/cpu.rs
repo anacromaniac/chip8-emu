@@ -402,7 +402,7 @@ mod tests {
     use super::*;
 
     fn new_chip8() -> Chip8 {
-        Chip8::new(Chip8Config::default())
+        Chip8::new(Chip8Config::modern())
     }
 
     mod boot {
@@ -1028,7 +1028,7 @@ mod tests {
 
             #[test]
             fn test_shr_vx_shifts_vy_into_vx() {
-                let mut cpu = Chip8::new(Chip8Config::legacy());
+                let mut cpu = Chip8::new(Chip8Config::default());
                 cpu.v[3] = 0b00001010;
                 cpu.execute(Instruction::ShrVx { x: 2, y: 3 });
                 assert_eq!(cpu.v[2], 0b00000101);
@@ -1038,7 +1038,7 @@ mod tests {
 
             #[test]
             fn test_shr_vx_saves_lost_bit() {
-                let mut cpu = Chip8::new(Chip8Config::legacy());
+                let mut cpu = Chip8::new(Chip8Config::default());
                 cpu.v[3] = 0b00001011;
                 cpu.execute(Instruction::ShrVx { x: 2, y: 3 });
                 assert_eq!(cpu.v[0xF], 1);
@@ -1083,7 +1083,7 @@ mod tests {
 
             #[test]
             fn test_shl_vx_shifts_vy_into_vx() {
-                let mut cpu = Chip8::new(Chip8Config::legacy());
+                let mut cpu = Chip8::new(Chip8Config::default());
                 cpu.v[3] = 0b00000101;
                 cpu.execute(Instruction::ShlVx { x: 2, y: 3 });
                 assert_eq!(cpu.v[2], 0b00001010);
@@ -1093,7 +1093,7 @@ mod tests {
 
             #[test]
             fn test_shl_vx_saves_lost_bit() {
-                let mut cpu = Chip8::new(Chip8Config::legacy());
+                let mut cpu = Chip8::new(Chip8Config::default());
                 cpu.v[3] = 0b10000001;
                 cpu.execute(Instruction::ShlVx { x: 2, y: 3 });
                 assert_eq!(cpu.v[0xF], 1);
@@ -1149,7 +1149,7 @@ mod tests {
 
             #[test]
             fn test_jp_v0_jumps_to_addr_plus_v0() {
-                let mut cpu = Chip8::new(Chip8Config::legacy());
+                let mut cpu = Chip8::new(Chip8Config::default());
                 cpu.v[0] = 0x10;
                 cpu.execute(Instruction::JpV0 { addr: 0x200 });
                 assert_eq!(cpu.pc, 0x210);
@@ -1438,7 +1438,7 @@ mod tests {
 
             #[test]
             fn test_ld_i_vx_stores_registers() {
-                let mut cpu = Chip8::new(Chip8Config::legacy());
+                let mut cpu = Chip8::new(Chip8Config::default());
                 cpu.i = 0x300;
                 cpu.v[0] = 0x11;
                 cpu.v[1] = 0x22;
@@ -1456,7 +1456,7 @@ mod tests {
 
             #[test]
             fn test_ld_vx_i_loads_registers() {
-                let mut cpu = Chip8::new(Chip8Config::legacy());
+                let mut cpu = Chip8::new(Chip8Config::default());
                 cpu.i = 0x300;
                 cpu.memory[0x300] = 0x11;
                 cpu.memory[0x301] = 0x22;
@@ -1519,7 +1519,7 @@ mod tests {
 
             #[test]
             fn test_shr_legacy_shifts_vy_into_vx() {
-                let mut cpu = Chip8::new(Chip8Config::legacy());
+                let mut cpu = Chip8::new(Chip8Config::default());
                 cpu.v[2] = 0b00000000; // Vx initial value doesn't matter
                 cpu.v[3] = 0b00001010;
                 cpu.execute(Instruction::ShrVx { x: 2, y: 3 });
@@ -1541,7 +1541,7 @@ mod tests {
 
             #[test]
             fn test_shl_legacy_shifts_vy_into_vx() {
-                let mut cpu = Chip8::new(Chip8Config::legacy());
+                let mut cpu = Chip8::new(Chip8Config::default());
                 cpu.v[2] = 0b00000000; // Vx initial value doesn't matter
                 cpu.v[3] = 0b00000101;
                 cpu.execute(Instruction::ShlVx { x: 2, y: 3 });
@@ -1568,7 +1568,7 @@ mod tests {
 
             #[test]
             fn test_ld_i_vx_legacy_increments_i() {
-                let mut cpu = Chip8::new(Chip8Config::legacy());
+                let mut cpu = Chip8::new(Chip8Config::default());
                 cpu.i = 0x300;
                 cpu.v[0] = 0xAA;
                 cpu.v[1] = 0xBB;
@@ -1592,7 +1592,7 @@ mod tests {
 
             #[test]
             fn test_ld_vx_i_legacy_increments_i() {
-                let mut cpu = Chip8::new(Chip8Config::legacy());
+                let mut cpu = Chip8::new(Chip8Config::default());
                 cpu.i = 0x300;
                 cpu.memory[0x300] = 0xAA;
                 cpu.memory[0x301] = 0xBB;
@@ -1618,7 +1618,7 @@ mod tests {
 
             #[test]
             fn test_jp_v0_legacy_uses_v0_as_offset() {
-                let mut cpu = Chip8::new(Chip8Config::legacy());
+                let mut cpu = Chip8::new(Chip8Config::default());
                 cpu.v[0] = 0x30;
                 cpu.v[2] = 0xFF; // V[2] is ignored in legacy mode
                 cpu.execute(Instruction::JpV0 { addr: 0x200 });
@@ -1643,7 +1643,7 @@ mod tests {
 
             #[test]
             fn test_drw_legacy_clips_past_right_edge() {
-                let mut cpu = Chip8::new(Chip8Config::legacy());
+                let mut cpu = Chip8::new(Chip8Config::default());
                 cpu.memory[cpu.i as usize] = 0xFF; // 8 pixels wide
                 cpu.v[0] = 62; // x=62, only pixels at 62 and 63 are in bounds
                 cpu.v[1] = 0;
@@ -1667,7 +1667,7 @@ mod tests {
 
             #[test]
             fn test_drw_legacy_clips_past_bottom_edge() {
-                let mut cpu = Chip8::new(Chip8Config::legacy());
+                let mut cpu = Chip8::new(Chip8Config::default());
                 cpu.memory[cpu.i as usize] = 0xFF;
                 cpu.memory[cpu.i as usize + 1] = 0xFF;
                 cpu.v[0] = 0;
@@ -1694,7 +1694,7 @@ mod tests {
 
             #[test]
             fn test_or_legacy_resets_vf_to_zero() {
-                let mut cpu = Chip8::new(Chip8Config::legacy());
+                let mut cpu = Chip8::new(Chip8Config::default());
                 cpu.v[0xF] = 0x42;
                 cpu.v[0] = 0xF0;
                 cpu.v[1] = 0x0F;
@@ -1716,7 +1716,7 @@ mod tests {
 
             #[test]
             fn test_and_legacy_resets_vf_to_zero() {
-                let mut cpu = Chip8::new(Chip8Config::legacy());
+                let mut cpu = Chip8::new(Chip8Config::default());
                 cpu.v[0xF] = 0x42;
                 cpu.v[0] = 0xFF;
                 cpu.v[1] = 0x0F;
@@ -1738,7 +1738,7 @@ mod tests {
 
             #[test]
             fn test_xor_legacy_resets_vf_to_zero() {
-                let mut cpu = Chip8::new(Chip8Config::legacy());
+                let mut cpu = Chip8::new(Chip8Config::default());
                 cpu.v[0xF] = 0x42;
                 cpu.v[0] = 0xFF;
                 cpu.v[1] = 0x0F;

@@ -43,27 +43,27 @@ pub struct Chip8Config {
 }
 
 impl Default for Chip8Config {
-    /// Returns the modern (CHIP-48/SCHIP era) configuration.
+    /// Returns the legacy (1977 COSMAC VIP) configuration.
     fn default() -> Self {
-        Self {
-            shift_uses_vy: false,
-            load_store_increments_i: false,
-            jump_uses_v0: false,
-            clip_sprites: false,
-            reset_vf_after_logical: false,
-        }
-    }
-}
-
-impl Chip8Config {
-    /// Returns a configuration matching the original 1977 COSMAC VIP interpreter.
-    pub fn legacy() -> Self {
         Self {
             shift_uses_vy: true,
             load_store_increments_i: true,
             jump_uses_v0: true,
             clip_sprites: true,
             reset_vf_after_logical: true,
+        }
+    }
+}
+
+impl Chip8Config {
+    /// Returns a configuration matching modern CHIP-48/SCHIP-era interpreters.
+    pub fn modern() -> Self {
+        Self {
+            shift_uses_vy: false,
+            load_store_increments_i: false,
+            jump_uses_v0: false,
+            clip_sprites: false,
+            reset_vf_after_logical: false,
         }
     }
 }
