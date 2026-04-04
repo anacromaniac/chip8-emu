@@ -390,6 +390,14 @@ impl Chip8 {
         self.sound_timer > 0
     }
 
+    pub fn display(&self) -> &[bool] {
+        &self.display
+    }
+
+    pub fn set_key(&mut self, key: usize, pressed: bool) {
+        self.keys[key] = pressed;
+    }
+
     fn reset_vf_if_logical_quirk(&mut self) {
         if self.config.reset_vf_after_logical {
             self.v[0xF] = 0;
